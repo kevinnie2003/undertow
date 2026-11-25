@@ -110,8 +110,8 @@ const EN: Pack = {
 const ZH: Pack = {
   openers: {
     blunt: ['好。', '听着。', '没时间磨蹭了。', '我直说。', ''],
-    warm: ['好了，大家。', '各位，听我说。', '我知道这很难。', '大家深呼吸。', ''],
-    analytical: ['我来梳理一下。', '看看我们知道什么：', '先看数据。', '我有几点观察。', ''],
+    warm: ['好了，各位。', '各位，听我说。', '我知道这很难。', '大家深呼吸。', ''],
+    analytical: ['我来梳理一下。', '看看我们知道些什么。', '先看数据。', '我有几点观察。', ''],
     nervous: ['呃，好吧。', '我、我得说一句。', '抱歉，信息有点多。', '好好好。', ''],
     dry: ['嗯。', '那么。', '行吧。', ''],
   },
@@ -130,37 +130,37 @@ const ZH: Pack = {
     dry: ['美好的一夜，没人淹死。', '海底又一个美好的早晨。'],
   },
   quiet: {
-    blunt: ['我还没有确凿的东西。先看着。', '没什么可报告的。谁给我个理由。', '嘴上说说不算数，我要看投票。'],
-    warm: ['我还没什么头绪，在听大家说。', '我这边没有具体的。我们继续聊。', '说实话，现在我信任你们大多数人。'],
-    analytical: ['数据还太少，判断动不了。', '我的先验没怎么变。', '还没有定论。我在记谁声称了什么。'],
+    blunt: ['我还没有确凿的东西。先看着。', '没什么可报告的。谁给我个理由。', '光说不算，我要看大家怎么投。'],
+    warm: ['我还没什么头绪，在听大家说。', '我手上还没有实锤，再聊聊看。', '说实话，现在我信任你们大多数人。'],
+    analytical: ['信息还太少，下不了判断。', '我之前的判断基本没变。', '还没有定论。我在记谁声称了什么。'],
     nervous: ['我什么都不知道，我发誓。', '我这边什么都没有，抱歉。', '下次能不能让别人先说？'],
-    dry: ['没什么可补充的。很意外吧。', '我的高见留着以后再说。', '我这个角落没什么新闻。'],
+    dry: ['没什么可补充的。很意外吧。', '我的高见留着以后再说。', '我这边风平浪静。'],
   },
-  last: ['走之前我说一句：', '最后一件事：', '记录在案：'],
+  last: ['走之前我说一句。', '最后说一件事。', '我留个记录。'],
   defend: ['我不是暗流。', '你们找错人了。', '别盯着我，我是船员。'],
   join: '',
   sentence(c, voice, name, rng) {
     const role = (r: Parameters<typeof roleName>[0]) => roleName(r, 'zh');
     switch (c.type) {
       case 'role':
-        return rng.pick([`我是${role(c.role)}。`, `我直说了：我是${role(c.role)}。`, `摊牌吧：我是${role(c.role)}。`]);
+        return rng.pick([`我是${role(c.role)}。`, `我直说了，我是${role(c.role)}。`, `摊牌吧，我是${role(c.role)}。`]);
       case 'scan':
         return c.result === 'undertow'
-          ? rng.pick([`第${c.round}晚我探测了${name(c.target)}，回声不对劲。是暗流。`, `第${c.round}晚${name(c.target)}的回声是暗流。`])
-          : rng.pick([`第${c.round}晚：${name(c.target)}的回声干净，是船员。`, `${name(c.target)}是清白的，我第${c.round}晚探测过。`]);
+          ? rng.pick([`第${c.round}夜我探测了${name(c.target)}，回声不对劲。是暗流。`, `第${c.round}夜${name(c.target)}的回声是暗流。`])
+          : rng.pick([`第${c.round}夜：${name(c.target)}的回声干净，是船员。`, `${name(c.target)}是清白的，我第${c.round}夜探测过。`]);
       case 'protect':
-        return `第${c.round}晚我把${name(c.target)}封进了医疗舱。`;
+        return `第${c.round}夜我把${name(c.target)}封进了医疗舱。`;
       case 'read':
-        return `第${c.round}晚我调出了${name(c.target)}的档案：${role(c.role)}。`;
+        return `第${c.round}夜我调出了${name(c.target)}的档案：${role(c.role)}。`;
       case 'clue':
         return rng.pick([
-          `第${c.round}晚站务日志给了我一份名单：${list(c.suspects, name, '、', '和')}。其中至少有一个暗流。`,
-          `我第${c.round}晚的日志线索说，${list(c.suspects, name, '、', '和')}里有暗流。`,
+          `第${c.round}夜站务日志给了我一份名单：${list(c.suspects, name, '、', '和')}。其中至少有一个暗流。`,
+          `我第${c.round}夜的日志线索说，${list(c.suspects, name, '、', '和')}里有暗流。`,
         ]);
       case 'accuse': {
         const t = name(c.target);
         const lines: Record<Voice, string[]> = {
-          blunt: [`${t}是暗流。我拿我的氧气打赌。`, `${t}说不通。`],
+          blunt: [`${t}是暗流。我拿我的氧气打赌。`, `${t}的说法前后对不上。`],
           warm: [`对不起，${t}，但你让我担心。`, `${t}有点不对劲，我说不上来。`],
           analytical: [`按证据看，${t}是我的头号嫌疑人。`, `数字一直指向${t}。`],
           nervous: [`我觉得可能是${t}？大概？`, `${t}让我有点害怕。`],
@@ -173,7 +173,7 @@ const ZH: Pack = {
       case 'intend_vote':
         return c.target === 'skip'
           ? rng.pick(['这次我先不投。', '除非有新情况，我弃票。'])
-          : rng.pick([`我投${name(c.target)}。`, `我的票给${name(c.target)}。`, `${name(c.target)}拿我这一票。`]);
+          : rng.pick([`我投${name(c.target)}。`, `我的票给${name(c.target)}。`, `这一票给${name(c.target)}。`]);
     }
   },
 };

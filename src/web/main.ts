@@ -296,7 +296,7 @@ function renderRoster() {
       h(
         'span',
         { class: 'who' },
-        h('span', { class: 'nm' }, p.name, p.human ? h('span', { class: 'tag' }, s.you) : null, partner ? h('span', { class: 'tag undertow' }, s.partner) : null),
+        h('span', { class: 'nm' }, p.name, p.human && p.name.trim().toLowerCase() !== s.you.toLowerCase() ? h('span', { class: 'tag' }, s.you) : null, partner ? h('span', { class: 'tag undertow' }, s.partner) : null),
         h('span', { class: 'job' }, p.human ? s.thatsYou : personaJob(p, uiLang()), thinking ? h('span', { class: 'dots' }, ' ···') : null),
         h(
           'span',
@@ -304,7 +304,7 @@ function renderRoster() {
           role ? h('span', { class: `badge role ${ROLES[role].faction}` }, roleName(role)) : null,
           claims.get(p.id) ? h('span', { class: 'badge claim' }, s.claims(roleName(claims.get(p.id)!))) : null,
           !p.alive ? h('span', { class: 'badge fate' }, p.fate === 'dragged' ? s.draggedUnder : s.airlocked) : null,
-          todaysVotes.get(p.id) && p.alive && v.phase !== 'night' ? h('span', { class: 'badge votes' }, s.voteIntents(todaysVotes.get(p.id)!)) : null,
+          todaysVotes.get(p.id) && p.alive && v.phase !== 'night' ? h('span', { class: 'badge intent' }, s.voteIntents(todaysVotes.get(p.id)!)) : null,
         ),
         sus !== undefined && p.alive ? h('span', { class: 'susbar', title: s.suspicion((sus * 100).toFixed(0)) }, h('span', { style: `width:${(sus * 100).toFixed(0)}%` })) : null,
       ),
@@ -339,10 +339,10 @@ function claimChip(c: Claim, onRemove?: () => void): HTMLElement {
       text = s.vouch(name(c.target));
       break;
     case 'intend_vote':
-      text = s.vote(c.target === 'skip' ? S().skip : name(c.target));
+      text = c.target === 'skip' ? s.skipVote : s.vote(name(c.target));
       break;
   }
-  const hostile = c.type === 'accuse' || (c.type === 'scan' && c.result === 'undertow') || c.type === 'intend_vote';
+  const hostile = c.type === 'accuse' || (c.type === 'scan' && c.result === 'undertow') || (c.type === 'intend_vote' && c.target !== 'skip');
   return h(
     'span',
     { class: `chip ${c.type} ${hostile ? 'hostile' : ''}` },
@@ -429,13 +429,30 @@ function renderLog() {
     log.replaceChildren();
     renderedEvents = 0;
   }
-  const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+  watchLog(log);
   for (const e of v.events.slice(renderedEvents)) {
     const node = eventNode(e);
     if (node) log.append(node);
   }
   renderedEvents = v.events.length;
-  if (nearBottom) log.scrollTop = log.scrollHeight;
+  if (logPinned) log.scrollTop = log.scrollHeight;
+}
+
+// The log follows new lines while the reader is at the bottom. It also stays
+// pinned when the action panel below grows (e.g. the speech composer opens).
+let logPinned = true;
+let logWatched = false;
+function watchLog(log: HTMLElement) {
+  if (logWatched) return;
+  logWatched = true;
+  log.addEventListener('scroll', () => {
+    logPinned = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+  });
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => {
+      if (logPinned) log.scrollTop = log.scrollHeight;
+    }).observe(log);
+  }
 }
 
 function renderSide() {

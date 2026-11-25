@@ -92,6 +92,7 @@ const EN = {
     accuse: (who: string) => `accuses ${who}`,
     vouch: (who: string) => `vouches ${who}`,
     vote: (who: string) => `votes ${who}`,
+    skipVote: 'holds vote',
   },
   skip: 'skip',
   remove: 'remove',
@@ -160,7 +161,7 @@ const EN = {
   verbs: { drag: 'Drag under', scan: 'Ping with sonar', protect: 'Seal in the med bay', read: 'Read the file of' } as Record<string, string>,
   nobody: 'Nobody',
   voteToAirlock: 'Vote to airlock',
-  speakPh: 'Say something to the crew… (e.g. "I pinged Bram last night, he is clean. I\'m voting Mara.")',
+  speakPh: 'Say something to the crew… (e.g. "I pinged Bram last night and the echo came back crew. I\'m voting Jonah.")',
   lastPh: 'Your last words…',
   claimTypes: {
     accuse: 'accuse',
@@ -275,6 +276,7 @@ const ZH: Strings = {
     accuse: (who) => `指认 ${who}`,
     vouch: (who) => `担保 ${who}`,
     vote: (who) => `投 ${who}`,
+    skipVote: '弃票',
   },
   skip: '弃票',
   remove: '移除',
@@ -339,7 +341,7 @@ const ZH: Strings = {
   verbs: { drag: '拖下水', scan: '用声呐探测', protect: '封进医疗舱', read: '查阅档案' },
   nobody: '不选',
   voteToAirlock: '投票推出气闸',
-  speakPh: '对船员们说点什么……（例如：“我昨晚探测了 Bram，他是清白的。我投 Mara。”）',
+  speakPh: '对船员们说点什么……（例如：“我昨晚探测了 Bram，回声是船员。我投 Jonah。”）',
   lastPh: '你的遗言……',
   claimTypes: {
     accuse: '指认',
