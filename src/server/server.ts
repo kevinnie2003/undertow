@@ -1,3 +1,4 @@
+import { asLang, langRef, type LangRef } from '../i18n/lang.js';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -21,6 +22,7 @@ interface Hosted {
   token: string;
   created: number;
   meter: UsageMeter;
+  lang: LangRef;
 }
 
 const games = new Map<string, Hosted>();
@@ -70,12 +72,14 @@ export function createGame(body: Record<string, unknown>): { id: string; token: 
   const name = String(body.name ?? 'You').trim().slice(0, 24) || 'You';
   const seat = Number.isInteger(body.seat) ? Math.min(players - 1, Math.max(0, Number(body.seat))) : seed % players;
   const meter = new UsageMeter();
+  const lang = langRef(asLang(body.lang));
   let session: GameSession | null = null;
   const make = makeAgentFactory({
     kind,
     seed,
     meter,
     onTrace: (t) => session?.recordTrace(t),
+    lang: () => lang.current,
     provider: () => (kind === 'anthropic' ? new AnthropicProvider() : new OpenAICompatibleProvider()),
   });
   session = new GameSession({
@@ -88,7 +92,7 @@ export function createGame(body: Record<string, unknown>): { id: string; token: 
   });
   const id = randomUUID();
   const token = randomUUID();
-  games.set(id, { session, token, created: Date.now(), meter });
+  games.set(id, { session, token, created: Date.now(), meter, lang });
   void session.start();
   return { id, token, view: session.view() };
 }
@@ -144,6 +148,12 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     const body = (await readBody(req)) as { paceMs?: number };
     hosted.session.paceMs = Math.max(0, Math.min(5000, Number(body.paceMs ?? 0)));
     return json(res, 200, { ok: true });
+  }
+
+  if (parts[3] === 'lang' && req.method === 'POST') {
+    const body = (await readBody(req)) as { lang?: unknown };
+    hosted.lang.current = asLang(body.lang);
+    return json(res, 200, { ok: true, lang: hosted.lang.current });
   }
 
   return json(res, 404, { error: 'not found' });

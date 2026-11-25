@@ -6,6 +6,7 @@ import { Memory } from './memory.js';
 import type { Persona } from './personas.js';
 import type { Agent, AgentInsight, Observation } from './types.js';
 import { renderSpeech } from './voice.js';
+import type { Lang } from '../i18n/lang.js';
 
 /** Tunable policy dials. Defaults were picked with the simulation harness. */
 export interface PolicyParams {
@@ -38,6 +39,8 @@ export interface HeuristicOptions {
   persona: Persona;
   seed?: number;
   policy?: Partial<PolicyParams>;
+  /** The language to speak and think in, read each time. Defaults to English. */
+  lang?: () => Lang;
 }
 
 interface Ctx {
@@ -73,6 +76,7 @@ export class HeuristicAgent implements Agent {
     revealed: false,
   };
   private coverDecided = false;
+  private lang: () => Lang;
 
   constructor(opts: HeuristicOptions) {
     this.id = opts.id;
@@ -80,6 +84,12 @@ export class HeuristicAgent implements Agent {
     this.policy = { ...DEFAULT_POLICY, ...opts.policy };
     this.memory = new Memory(opts.id);
     this.rng = new Rng(opts.seed ?? hashSeed(opts.id + opts.persona.name));
+    this.lang = opts.lang ?? (() => 'en');
+  }
+
+  /** Pick the thought in the current language. */
+  private say(en: string, zh: string): string {
+    return this.lang() === 'zh' ? zh : en;
   }
 
   insight(): AgentInsight {
@@ -137,7 +147,7 @@ export class HeuristicAgent implements Agent {
     const scene = firstToday
       ? { lost: m.deaths.filter((d) => d.round === round && d.fate === 'dragged').map((d) => d.player), calm: round > 1 && m.quietNights.includes(round) }
       : undefined;
-    return renderSpeech(claims, this.persona, (id) => m.name(id), this.rng, mood ?? (accused ? 'defend' : undefined), scene);
+    return renderSpeech(claims, this.persona, (id) => m.name(id), this.rng, mood ?? (accused ? 'defend' : undefined), scene, this.lang());
   }
 
   private top(ids: PlayerId[], score: (id: PlayerId) => number): PlayerId | null {
@@ -301,10 +311,10 @@ export class HeuristicAgent implements Agent {
     const flat = p(best) < this.policy.skipRatio * ctx.avg && this.intentionShare(ctx, best, ctx.priv) < 0.3;
     // Skipping costs hull, so only do it while there is hull to spare.
     if (flat && ctx.obs.hull >= 3) {
-      this.lastThought = `No clear suspect (top ${p(best).toFixed(2)} vs avg ${ctx.avg.toFixed(2)}), skipping.`;
+      this.lastThought = this.say(`No clear suspect (top ${p(best).toFixed(2)} vs avg ${ctx.avg.toFixed(2)}), skipping.`, `没有明确的嫌疑人（最高 ${p(best).toFixed(2)}，平均 ${ctx.avg.toFixed(2)}），弃票。`);
       return 'skip';
     }
-    this.lastThought = `Voting ${this.memory.name(best)} (P=${p(best).toFixed(2)}).`;
+    this.lastThought = this.say(`Voting ${this.memory.name(best)} (P=${p(best).toFixed(2)}).`, `投 ${this.memory.name(best)}（P=${p(best).toFixed(2)}）。`);
     return best;
   }
 
@@ -349,7 +359,7 @@ export class HeuristicAgent implements Agent {
     const partnerPick = this.memory.proposals.find((pr) => pr.round === ctx.obs.round && pr.player !== this.id && pr.target);
     if (partnerPick?.target && options.includes(partnerPick.target) && this.rng.next() < 0.85) return partnerPick.target;
     const target = this.top(options, (id) => this.threat(ctx, id) + 0.4 * this.rng.next());
-    this.lastThought = `Dragging ${this.memory.name(target!)} (threat ${this.threat(ctx, target!).toFixed(2)}).`;
+    this.lastThought = this.say(`Dragging ${this.memory.name(target!)} (threat ${this.threat(ctx, target!).toFixed(2)}).`, `拖走 ${this.memory.name(target!)}（威胁 ${this.threat(ctx, target!).toFixed(2)}）。`);
     return target;
   }
 
@@ -451,15 +461,15 @@ export class HeuristicAgent implements Agent {
     if (crowd && partners.includes(crowd)) {
       const share = this.intentionShare(ctx, crowd, ctx.pub);
       if (share > 0.45 || ctx.pub.p.get(crowd)! > this.policy.bussAt) {
-        this.lastThought = `Partner ${this.memory.name(crowd)} is lost; voting with the crowd for cover.`;
+        this.lastThought = this.say(`Partner ${this.memory.name(crowd)} is lost; voting with the crowd for cover.`, `同伴 ${this.memory.name(crowd)} 保不住了，跟着大家投票做掩护。`);
         return crowd;
       }
       const alt = this.frameTarget(ctx);
-      this.lastThought = `Splitting the vote away from partner onto ${alt ? this.memory.name(alt) : 'skip'}.`;
+      this.lastThought = this.say(`Splitting the vote away from partner onto ${alt ? this.memory.name(alt) : 'skip'}.`, `把票从同伴身上引开，投给${alt ? ` ${this.memory.name(alt)}` : '弃票'}。`);
       return alt ?? 'skip';
     }
     const target = this.frameTarget(ctx);
-    this.lastThought = `Framing ${target ? this.memory.name(target) : 'nobody'}.`;
+    this.lastThought = this.say(`Framing ${target ? this.memory.name(target) : 'nobody'}.`, `嫁祸给${target ? ` ${this.memory.name(target)}` : '没人'}。`);
     return target ?? 'skip';
   }
 }

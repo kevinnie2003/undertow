@@ -1,9 +1,13 @@
 import { ROLES } from '../engine/roles.js';
-import type { Action, Claim, GameEvent, PlayerId, RoleId } from '../engine/types.js';
+import type { Action, Claim, Faction, GameEvent, PlayerId, RoleId } from '../engine/types.js';
 import type { AgentKind } from '../agents/factory.js';
+import { personaJob } from '../agents/personas.js';
+import { asLang, type Lang } from '../i18n/lang.js';
+import { factionName, roleBlurb, roleName as roleNameIn } from '../i18n/roles.js';
 import { extractClaims } from './claimParser.js';
 import { LocalClient, RemoteClient, serverKinds, type GameClient, type NewGameOptions, type View } from './client.js';
-import { parseReplay, ReplayClient, ReplayRecorder } from './replay.js';
+import { parseReplay, ReplayClient, ReplayError, ReplayRecorder } from './replay.js';
+import { S, setUiLang, uiLang } from './strings.js';
 
 // ---------------------------------------------------------------------------
 // Tiny DOM helper
@@ -37,27 +41,95 @@ let mind: PlayerId | null = null;
 let kinds: AgentKind[] | null = null;
 let sending = false;
 let recorder: ReplayRecorder | null = null;
+let lastPendingKey = '';
 
-const KIND_LABEL: Record<AgentKind, string> = {
-  heuristic: 'Heuristic agents (offline)',
-  'mock-llm': 'Mock LLM agents (offline, full ReAct pipeline)',
-  anthropic: 'Claude agents (server)',
-  openai: 'OpenAI-compatible agents (server)',
-};
+const LANG_KEY = 'undertow.lang';
+
+// ---------------------------------------------------------------------------
+// Language
+// ---------------------------------------------------------------------------
+
+function initialLang(): Lang {
+  const fromUrl = new URLSearchParams(location.search).get('lang');
+  if (fromUrl) return asLang(fromUrl);
+  try {
+    const saved = localStorage.getItem(LANG_KEY);
+    if (saved) return asLang(saved);
+  } catch {
+    // Storage can be blocked; fall back to the browser's language.
+  }
+  return navigator.language?.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+}
+
+/** Words that live in the static page. */
+function applyStatic() {
+  const s = S() as unknown as Record<string, unknown>;
+  const lang = uiLang();
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+  document.body.dataset.lang = lang;
+  document.title = S().docTitle;
+  for (const el of document.querySelectorAll<HTMLElement>('[data-t]')) el.textContent = String(s[el.dataset.t!] ?? '');
+  for (const el of document.querySelectorAll<HTMLElement>('[data-t-ph]')) el.setAttribute('placeholder', String(s[el.dataset.tPh!] ?? ''));
+  for (const el of document.querySelectorAll<HTMLElement>('[data-t-aria]')) el.setAttribute('aria-label', String(s[el.dataset.tAria!] ?? ''));
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.lang button')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+}
+
+function switchLang(lang: Lang) {
+  if (lang === uiLang()) return;
+  setUiLang(lang);
+  try {
+    localStorage.setItem(LANG_KEY, lang);
+  } catch {
+    // Not saved; the switch still applies to this visit.
+  }
+  const nameInput = $('name') as HTMLInputElement;
+  const wasDefault = !nameInput.value.trim() || nameInput.value === 'You' || nameInput.value === '你';
+  applyStatic();
+  if (wasDefault) nameInput.value = S().defaultName;
+  fillSetup();
+  client?.setLang(lang);
+  if (view) {
+    // Interface words change at once; lines already spoken stay as they were said.
+    const typed = ($('actions').querySelector('textarea') as HTMLTextAreaElement | null)?.value;
+    $('log').replaceChildren();
+    renderedEvents = 0;
+    lastPendingKey = '';
+    $('actions').replaceChildren();
+    render();
+    const area = $('actions').querySelector('textarea') as HTMLTextAreaElement | null;
+    if (area && typed) {
+      area.value = typed;
+      area.dispatchEvent(new Event('input'));
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Setup screen
 // ---------------------------------------------------------------------------
 
-async function initSetup() {
-  kinds = await serverKinds();
+function fillSetup() {
   const select = $('agent') as HTMLSelectElement;
+  const keep = select.value;
   const available: AgentKind[] = kinds ?? ['heuristic', 'mock-llm'];
-  select.replaceChildren(...available.map((k) => h('option', { value: k }, KIND_LABEL[k])));
+  select.replaceChildren(...available.map((k) => h('option', { value: k }, S().kind[k])));
+  if (keep && available.includes(keep as AgentKind)) select.value = keep;
   $('server-note').textContent = kinds
-    ? `Connected to the Undertow server.${kinds.includes('anthropic') || kinds.includes('openai') ? ' LLM agents available.' : ' Set an API key on the server for LLM agents.'}`
-    : 'Running fully in your browser. Start the Node server for Claude or OpenAI-compatible agents.';
+    ? S().serverConnected + (kinds.includes('anthropic') || kinds.includes('openai') ? S().serverLlm : S().serverNoLlm)
+    : S().browserOnly;
+  $('pace-out').textContent = `${($('pace') as HTMLInputElement).value} ${S().paceUnit}`;
+}
+
+async function initSetup() {
+  setUiLang(initialLang());
+  applyStatic();
+  ($('name') as HTMLInputElement).value = S().defaultName;
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.lang button')) b.addEventListener('click', () => switchLang(asLang(b.dataset.lang)));
   ($('seed') as HTMLInputElement).value = String(Math.floor(Math.random() * 100000));
+  $('pace').addEventListener('input', fillSetup);
+  fillSetup();
+  kinds = await serverKinds();
+  fillSetup();
   $('start').addEventListener('click', () => void startGame());
   const file = $('replay-file') as HTMLInputElement;
   file.addEventListener('change', () => {
@@ -73,7 +145,7 @@ function openReplay(text: string) {
     recorder = null;
     showGame(new ReplayClient(replay), 700);
   } catch (err) {
-    $('replay-error').textContent = (err as Error).message;
+    $('replay-error').textContent = err instanceof ReplayError ? S().replayErr[err.code] : (err as Error).message;
   }
 }
 
@@ -99,15 +171,16 @@ async function startGame() {
     players: Number(($('players') as HTMLSelectElement).value),
     seed: Number(($('seed') as HTMLInputElement).value) || 1,
     mode: (document.querySelector('input[name=mode]:checked') as HTMLInputElement).value as 'play' | 'watch',
-    name: ($('name') as HTMLInputElement).value.trim() || 'You',
+    name: ($('name') as HTMLInputElement).value.trim() || S().defaultName,
     agent: ($('agent') as HTMLSelectElement).value as AgentKind,
     paceMs: Number(($('pace') as HTMLInputElement).value),
+    lang: uiLang(),
   };
   let c: GameClient;
   try {
     c = kinds ? await RemoteClient.create(opts) : new LocalClient(opts);
   } catch (err) {
-    $('server-note').textContent = `Could not start: ${(err as Error).message}`;
+    $('server-note').textContent = S().couldNotStart((err as Error).message);
     return;
   }
   recorder = new ReplayRecorder();
@@ -122,8 +195,20 @@ function name(id: PlayerId): string {
   return view?.players.find((p) => p.id === id)?.name ?? id;
 }
 
+function names(ids: PlayerId[]): string {
+  return ids.map(name).join(S().listSep);
+}
+
 function roleName(r: RoleId) {
-  return ROLES[r].name;
+  return roleNameIn(r, uiLang());
+}
+
+function faction(f: Faction) {
+  return factionName(f, uiLang());
+}
+
+function seatNo(seat: number) {
+  return String(seat + 1).padStart(2, '0');
 }
 
 function render() {
@@ -137,15 +222,21 @@ function render() {
 
 function renderHeader() {
   const v = view!;
+  const s = S();
   const phase =
-    v.phase === 'ended' ? 'Game over' : v.phase === 'night' ? `Night ${v.round}` : v.phase === 'day_discussion' ? `Day ${v.round} · discussion` : v.phase === 'day_vote' ? `Day ${v.round} · vote` : `Day ${v.round} · last words`;
+    v.phase === 'ended'
+      ? s.gameOver
+      : v.phase === 'night'
+        ? s.night(v.round)
+        : `${s.day(v.round)} · ${v.phase === 'day_discussion' ? s.discussion : v.phase === 'day_vote' ? s.vote : s.lastWords}`;
   $('phase').textContent = phase;
   document.body.dataset.phase = v.phase;
-  const pips = [];
-  for (let i = 0; i < v.maxHull; i++) pips.push(h('span', { class: `pip ${i < v.hull ? 'ok' : 'lost'}`, title: 'hull integrity' }));
-  $('hull').replaceChildren(h('span', { class: 'label' }, 'Hull'), ...pips);
-  const usage = v.usage && v.usage.calls ? ` · ${v.usage.calls} model calls, ${(v.usage.inputTokens / 1000).toFixed(1)}k in / ${(v.usage.outputTokens / 1000).toFixed(1)}k out` : '';
-  $('meta').textContent = `${v.agentKind}${usage}`;
+  const cells = [];
+  for (let i = 0; i < v.maxHull; i++) cells.push(h('span', { class: `seg ${i < v.hull ? 'ok' : 'lost'}` }));
+  $('hull').replaceChildren(h('span', { class: 'k' }, s.hull), h('span', { class: 'segs', title: s.hullTitle }, cells), h('span', { class: 'num' }, `${v.hull}/${v.maxHull}`));
+  const usage =
+    v.usage && v.usage.calls ? ` · ${s.usage(v.usage.calls, (v.usage.inputTokens / 1000).toFixed(1), (v.usage.outputTokens / 1000).toFixed(1))}` : '';
+  $('meta').textContent = `${s.kindShort[v.agentKind] ?? v.agentKind}${usage}`;
 }
 
 function latestRoleClaims(events: GameEvent[]): Map<PlayerId, RoleId> {
@@ -162,6 +253,7 @@ function latestRoleClaims(events: GameEvent[]): Map<PlayerId, RoleId> {
 
 function renderRoster() {
   const v = view!;
+  const s = S();
   const claims = latestRoleClaims(v.events);
   const todaysVotes = new Map<PlayerId, number>();
   for (const e of v.events) {
@@ -181,15 +273,18 @@ function renderRoster() {
       if (vals.length) consensus.set(p.id, vals.reduce((a, b) => a + b, 0) / vals.length);
     }
   }
-  const cards = v.players.map((p) => {
+  const rows = v.players.map((p) => {
     const role = v.roles?.[p.id];
     const partner = v.partners.includes(p.id);
     const thinking = v.thinking.includes(p.id);
     const sus = consensus.get(p.id);
+    const selectable = !!v.insights;
     return h(
-      'div',
+      selectable ? 'button' : 'div',
       {
         class: `card ${p.alive ? '' : 'dead'} ${p.human ? 'you' : ''} ${partner ? 'partner' : ''} ${role ? ROLES[role].faction : ''} ${mind === p.id ? 'selected' : ''}`,
+        type: selectable ? 'button' : undefined,
+        'aria-pressed': selectable ? String(mind === p.id) : undefined,
         onclick: () => {
           if (v.insights) {
             mind = p.id;
@@ -197,122 +292,132 @@ function renderRoster() {
           }
         },
       },
-      h('div', { class: 'avatar' }, p.name.split(' ').map((s) => s[0]).join('').slice(0, 2)),
+      h('span', { class: 'seat' }, seatNo(p.seat)),
       h(
-        'div',
+        'span',
         { class: 'who' },
-        h('div', { class: 'nm' }, p.name, p.human ? h('span', { class: 'tag' }, 'you') : null, partner ? h('span', { class: 'tag undertow' }, 'partner') : null),
-        h('div', { class: 'job' }, p.human ? 'that\'s you' : p.job, thinking ? h('span', { class: 'dots' }, ' ···') : null),
+        h('span', { class: 'nm' }, p.name, p.human ? h('span', { class: 'tag' }, s.you) : null, partner ? h('span', { class: 'tag undertow' }, s.partner) : null),
+        h('span', { class: 'job' }, p.human ? s.thatsYou : personaJob(p, uiLang()), thinking ? h('span', { class: 'dots' }, ' ···') : null),
         h(
-          'div',
+          'span',
           { class: 'badges' },
           role ? h('span', { class: `badge role ${ROLES[role].faction}` }, roleName(role)) : null,
-          claims.get(p.id) ? h('span', { class: 'badge claim' }, `claims ${roleName(claims.get(p.id)!)}`) : null,
-          !p.alive ? h('span', { class: 'badge fate' }, p.fate === 'dragged' ? 'dragged under' : 'airlocked') : null,
-          todaysVotes.get(p.id) && p.alive && v.phase !== 'night' ? h('span', { class: 'badge votes' }, `${todaysVotes.get(p.id)} vote intents`) : null,
+          claims.get(p.id) ? h('span', { class: 'badge claim' }, s.claims(roleName(claims.get(p.id)!))) : null,
+          !p.alive ? h('span', { class: 'badge fate' }, p.fate === 'dragged' ? s.draggedUnder : s.airlocked) : null,
+          todaysVotes.get(p.id) && p.alive && v.phase !== 'night' ? h('span', { class: 'badge votes' }, s.voteIntents(todaysVotes.get(p.id)!)) : null,
         ),
-        sus !== undefined && p.alive ? h('div', { class: 'susbar', title: `crew agents' average suspicion: ${(sus * 100).toFixed(0)}%` }, h('div', { style: `width:${(sus * 100).toFixed(0)}%` })) : null,
+        sus !== undefined && p.alive ? h('span', { class: 'susbar', title: s.suspicion((sus * 100).toFixed(0)) }, h('span', { style: `width:${(sus * 100).toFixed(0)}%` })) : null,
       ),
     );
   });
-  $('roster').replaceChildren(...cards);
+  $('roster').replaceChildren(...rows);
 }
 
 function claimChip(c: Claim, onRemove?: () => void): HTMLElement {
+  const s = S().chip;
   let text = '';
   switch (c.type) {
     case 'role':
-      text = `role: ${roleName(c.role)}`;
+      text = s.role(roleName(c.role));
       break;
     case 'scan':
-      text = `ping n${c.round}: ${name(c.target)} = ${c.result}`;
+      text = s.scan(c.round, name(c.target), faction(c.result));
       break;
     case 'protect':
-      text = `sealed ${name(c.target)} n${c.round}`;
+      text = s.protect(c.round, name(c.target));
       break;
     case 'read':
-      text = `file n${c.round}: ${name(c.target)} = ${roleName(c.role)}`;
+      text = s.read(c.round, name(c.target), roleName(c.role));
       break;
     case 'clue':
-      text = `clue n${c.round}: ${c.suspects.map(name).join(' / ')}`;
+      text = s.clue(c.round, c.suspects.map(name).join(' / '));
       break;
     case 'accuse':
-      text = `accuses ${name(c.target)}`;
+      text = s.accuse(name(c.target));
       break;
     case 'vouch':
-      text = `vouches ${name(c.target)}`;
+      text = s.vouch(name(c.target));
       break;
     case 'intend_vote':
-      text = `votes ${c.target === 'skip' ? 'skip' : name(c.target)}`;
+      text = s.vote(c.target === 'skip' ? S().skip : name(c.target));
       break;
   }
   const hostile = c.type === 'accuse' || (c.type === 'scan' && c.result === 'undertow') || c.type === 'intend_vote';
-  return h('span', { class: `chip ${c.type} ${hostile ? 'hostile' : ''}` }, text, onRemove ? h('button', { class: 'x', onclick: onRemove, title: 'remove' }, '×') : null);
+  return h(
+    'span',
+    { class: `chip ${c.type} ${hostile ? 'hostile' : ''}` },
+    text,
+    onRemove ? h('button', { class: 'x', type: 'button', onclick: onRemove, title: S().remove, 'aria-label': S().remove }, '×') : null,
+  );
 }
 
 function eventNode(e: GameEvent): HTMLElement | null {
   const v = view!;
+  const s = S();
   const d = e.data;
   const priv = e.visibleTo !== 'all';
-  const sys = (text: string, cls = '') => h('div', { class: `sys ${cls} ${priv ? 'private' : ''}` }, priv ? h('span', { class: 'lock' }, 'private') : null, text);
+  const sys = (text: string, cls = '') => h('div', { class: `sys ${cls} ${priv ? 'private' : ''}` }, priv ? h('span', { class: 'lock' }, s.private) : null, h('span', { class: 'tx' }, text));
   switch (d.type) {
     case 'game_start':
-      return sys(`Meridian-9, 4,000 metres down. ${d.players.length} aboard. Somewhere among them: ${d.setup.drowned + d.setup.siren} Undertow.`, 'intro');
+      return sys(s.intro(d.players.length, d.setup.drowned + d.setup.siren), 'intro');
     case 'role_assigned':
       if (d.player !== v.you) return null;
-      return sys(`You are the ${roleName(d.role)}.${d.partners.length ? ` Your fellow Undertow: ${d.partners.map(name).join(', ')}.` : ''}`, 'you');
+      return sys(s.youAre(roleName(d.role)) + (d.partners.length ? s.fellow(names(d.partners)) : ''), 'you');
     case 'phase':
       if (d.phase === 'ended') return null;
-      return h('div', { class: `divider ${d.phase}` }, d.phase === 'night' ? `Night ${d.round}` : d.phase === 'day_discussion' ? `Day ${d.round}` : d.phase === 'day_vote' ? 'The vote' : 'Last words');
+      return h(
+        'div',
+        { class: `divider ${d.phase}` },
+        h('span', {}, d.phase === 'night' ? s.night(d.round) : d.phase === 'day_discussion' ? s.day(d.round) : d.phase === 'day_vote' ? s.theVote : s.lastWordsDivider),
+      );
     case 'undertow_proposal':
-      return sys(`${name(d.player)} wants to drag ${d.target ? name(d.target) : 'nobody'} under${d.note ? `: "${d.note}"` : '.'}`, 'undertow');
+      return sys(s.proposal(name(d.player), d.target ? name(d.target) : null, d.note), 'undertow');
     case 'scan_result':
-      return sys(`${name(d.player)} pinged ${name(d.target)}: the echo reads ${d.result.toUpperCase()}.`, 'intel');
+      return sys(s.scanResult(name(d.player), name(d.target), faction(d.result)), 'intel');
     case 'protect_result':
-      return sys(`${name(d.player)} sealed ${name(d.target)} in the med bay.${d.saved ? ' It saved them.' : ''}`, 'intel');
+      return sys(s.protectResult(name(d.player), name(d.target), !!d.saved), 'intel');
     case 'read_result':
-      return sys(`${name(d.player)} read ${name(d.target)}'s file: ${roleName(d.role)}.`, 'intel');
+      return sys(s.readResult(name(d.player), name(d.target), roleName(d.role)), 'intel');
     case 'clue':
-      return sys(`Station log for ${name(d.player)}: at least one of ${d.suspects.map(name).join(', ')} is Undertow.`, 'intel');
+      return sys(s.clue(name(d.player), names(d.suspects)), 'intel');
     case 'dragged':
-      return sys(`${name(d.player)} was dragged under in the night.`, 'death');
+      return sys(s.dragged(name(d.player)), 'death');
     case 'quiet_night':
-      return e.round > 1 ? sys('Nobody was taken last night.', 'calm') : sys('The first night is calm. Everyone wakes.', 'calm');
+      return e.round > 1 ? sys(s.quiet, 'calm') : sys(s.firstNight, 'calm');
     case 'speech':
     case 'last_words': {
       const p = v.players.find((x) => x.id === d.player);
       return h(
         'div',
         { class: `speech ${d.type === 'last_words' ? 'last' : ''} ${p?.human ? 'mine' : ''}` },
-        h('div', { class: 'avatar small' }, (p?.name ?? '?').split(' ').map((s) => s[0]).join('').slice(0, 2)),
+        h('div', { class: 'speaker' }, h('span', { class: 'seat' }, p ? seatNo(p.seat) : '··'), h('span', { class: 'sn' }, p?.name ?? d.player)),
         h(
           'div',
-          { class: 'bubble' },
-          h('div', { class: 'speaker' }, p?.name ?? d.player, d.type === 'last_words' ? h('span', { class: 'tag' }, 'last words') : null),
-          h('div', { class: 'text' }, d.speech.text || '…'),
+          { class: 'body' },
+          d.type === 'last_words' ? h('div', { class: 'tag' }, s.lastWordsTag) : null,
+          h('p', { class: 'text' }, d.speech.text || '…'),
           d.speech.claims.length ? h('div', { class: 'chips' }, d.speech.claims.map((c) => claimChip(c))) : null,
         ),
       );
     }
     case 'votes': {
-      const rows = Object.entries(d.votes).map(([who, t]) => h('span', { class: 'vote' }, `${name(who)} → ${t === 'skip' ? 'skip' : name(t)}`));
-      return h('div', { class: 'votes' }, h('div', { class: 'tally' }, Object.entries(d.tally).sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t === 'skip' ? 'skip' : name(t)} ${n}`).join(' · ')), h('div', { class: 'rows' }, rows));
+      const target = (t: string) => (t === 'skip' ? s.skip : name(t));
+      const tally = Object.entries(d.tally).sort((a, b) => b[1] - a[1]);
+      return h(
+        'div',
+        { class: 'votes' },
+        h('div', { class: 'tally' }, tally.map(([t, n]) => h('span', { class: 't' }, h('b', {}, String(n)), ' ', target(t)))),
+        h('div', { class: 'rows' }, Object.entries(d.votes).map(([who, t]) => h('span', { class: 'vote' }, `${name(who)} → ${target(t)}`))),
+      );
     }
     case 'airlocked':
-      return sys(`${name(d.player)} is pushed into the airlock.${d.faction ? ` They were ${d.faction}.` : ''}`, 'death');
+      return sys(s.airlockedEv(name(d.player), d.faction ? faction(d.faction) : null), 'death');
     case 'no_airlock':
-      return sys(d.reason === 'tie' ? 'The vote is tied. Nobody goes into the airlock.' : 'The crew holds its vote.', 'warn');
+      return sys(d.reason === 'tie' ? s.tie : s.held, 'warn');
     case 'hull':
-      return sys(`The hull groans. Integrity ${d.hull}/${v.maxHull}.`, 'warn');
-    case 'game_end': {
-      const reasons: Record<string, string> = {
-        all_undertow_gone: 'Every Undertow has been airlocked.',
-        undertow_parity: 'The Undertow now match the crew. The station is theirs.',
-        hull_breach: 'The hull gives way. The sea comes in.',
-        round_limit: 'The rescue never comes.',
-      };
-      return h('div', { class: `end ${d.winner}` }, h('div', { class: 'big' }, d.winner === 'crew' ? 'The crew survives' : 'The Undertow win'), h('div', {}, reasons[d.reason]));
-    }
+      return sys(s.hullEv(d.hull, v.maxHull), 'warn');
+    case 'game_end':
+      return h('div', { class: `end ${d.winner}` }, h('div', { class: 'big' }, d.winner === 'crew' ? s.crewWins : s.undertowWins), h('p', {}, s.reasons[d.reason]));
   }
   return null;
 }
@@ -335,6 +440,7 @@ function renderLog() {
 
 function renderSide() {
   const v = view!;
+  const s = S();
   const side = $('side');
   if (v.insights && Object.keys(v.insights).length) {
     const ids = Object.keys(v.insights);
@@ -351,28 +457,37 @@ function renderSide() {
           { class: `brow ${p.alive ? '' : 'dead'}` },
           h('span', { class: 'bn' }, p.name),
           h('span', { class: 'bbar' }, h('span', { class: `fill ${truth ?? ''}`, style: `width:${(b * 100).toFixed(0)}%` })),
-          h('span', { class: 'bv' }, `${(b * 100).toFixed(0)}%`),
+          h('span', { class: 'bv' }, `${(b * 100).toFixed(0)}`),
         );
       });
     const traces = (v.traces ?? []).filter((t) => t.player === mind).slice(-3).reverse();
     const parts: Child[] = [
-      h('h3', {}, 'Agent minds'),
-      h('p', { class: 'hint' }, 'Click a crew card to look inside that agent. Bars: how likely it thinks each player is Undertow (colour shows the truth).'),
-      h('div', { class: 'mindhead' }, h('strong', {}, name(mind)), role ? h('span', { class: `badge role ${ROLES[role].faction}` }, roleName(role)) : null),
+      h('h3', {}, s.minds),
+      h('p', { class: 'hint' }, s.mindsHint),
+      h('div', { class: `mindhead ${role ? ROLES[role].faction : ''}` }, h('strong', {}, name(mind)), role ? h('span', { class: `badge role ${ROLES[role].faction}` }, roleName(role)) : null),
       h('div', { class: 'beliefs' }, bars),
-      ins.thought ? h('div', { class: 'thought' }, h('span', { class: 'label' }, 'latest thought'), ins.thought) : null,
-      ins.notes?.length ? h('div', { class: 'notes' }, h('span', { class: 'label' }, 'private notes'), h('ul', {}, ins.notes.slice(-5).map((n) => h('li', {}, n)))) : null,
+      ins.thought ? h('div', { class: 'thought' }, h('span', { class: 'label' }, s.latestThought), h('p', {}, ins.thought)) : null,
+      ins.notes?.length ? h('div', { class: 'notes' }, h('span', { class: 'label' }, s.privateNotes), h('ul', {}, ins.notes.slice(-5).map((n) => h('li', {}, n)))) : null,
       traces.length
         ? h(
             'div',
             { class: 'traces' },
-            h('span', { class: 'label' }, 'ReAct trace'),
+            h('span', { class: 'label' }, s.trace),
             traces.map((t) =>
               h(
                 'details',
                 {},
-                h('summary', {}, `day ${t.round} · ${t.kind}${t.fallback ? ' · fell back to heuristic' : ''}`),
-                t.steps.map((s) => h('div', { class: 'step' }, h('code', {}, s.tool || 'invalid'), s.thought ? ` ${s.thought}` : '', s.error ? h('div', { class: 'err' }, s.error) : null, s.observation ? h('div', { class: 'obs' }, s.observation.slice(0, 280)) : null)),
+                h('summary', {}, s.traceSummary(t.round, t.kind, t.fallback)),
+                t.steps.map((st) =>
+                  h(
+                    'div',
+                    { class: 'step' },
+                    h('code', {}, st.tool || s.invalid),
+                    st.thought ? ` ${st.thought}` : '',
+                    st.error ? h('div', { class: 'err' }, st.error) : null,
+                    st.observation ? h('div', { class: 'obs' }, st.observation.slice(0, 280)) : null,
+                  ),
+                ),
               ),
             ),
           )
@@ -388,19 +503,25 @@ function renderSide() {
   const r = ROLES[v.yourRole];
   const intel = v.events.filter((e) => e.visibleTo !== 'all' && ['scan_result', 'protect_result', 'read_result', 'clue', 'undertow_proposal'].includes(e.data.type));
   side.replaceChildren(
-    h('div', { class: `rolecard ${r.faction}` }, h('div', { class: 'rk' }, 'your role'), h('div', { class: 'rn' }, r.name), h('p', {}, r.blurb), v.partners.length ? h('p', { class: 'partners' }, `Fellow Undertow: ${v.partners.map(name).join(', ')}`) : null),
-    h('h3', {}, 'Your intel'),
-    intel.length ? h('div', { class: 'intel' }, intel.map((e) => eventNode(e))) : h('p', { class: 'hint' }, 'Nothing yet.'),
-    h('h3', {}, 'On board'),
-    h('p', { class: 'hint' }, Object.entries(v.setup).filter(([, n]) => n > 0).map(([k, n]) => `${n}× ${roleName(k as RoleId)}`).join(' · ')),
     h(
-      'details',
-      { class: 'rules' },
-      h('summary', {}, 'How to play'),
-      h('p', {}, 'Each night the Undertow drag one crew member under (not the first night). Each day everyone speaks, then votes to airlock one person or skip. Strict plurality and more votes than skip are needed.'),
-      h('p', {}, 'A day without an airlocking costs one hull point; at zero the station floods and the Undertow win. Crew win when every Undertow is gone; the Undertow win at parity.'),
-      h('p', {}, 'Nobody learns who the lost really were, except the Archivist. Attach claims to your speech so the agents can track what you assert. Lying is allowed.'),
+      'div',
+      { class: `rolecard ${r.faction}` },
+      h('div', { class: 'rk' }, `${s.yourRole} · ${faction(r.faction)}`),
+      h('div', { class: 'rn' }, roleName(v.yourRole)),
+      h('p', {}, roleBlurb(v.yourRole, uiLang())),
+      v.partners.length ? h('p', { class: 'partners' }, s.fellowList(names(v.partners))) : null,
     ),
+    h('h3', {}, s.yourIntel),
+    intel.length ? h('div', { class: 'intel' }, intel.map((e) => eventNode(e))) : h('p', { class: 'hint' }, s.nothingYet),
+    h('h3', {}, s.onBoard),
+    h(
+      'ul',
+      { class: 'setup-list' },
+      Object.entries(v.setup)
+        .filter(([, n]) => n > 0)
+        .map(([k, n]) => h('li', { class: ROLES[k as RoleId].faction }, h('b', {}, String(n)), ' ', roleName(k as RoleId))),
+    ),
+    h('details', { class: 'rules' }, h('summary', {}, s.howTo), s.rules.map((p) => h('p', {}, p))),
   );
 }
 
@@ -413,7 +534,7 @@ async function send(action: Action) {
   sending = true;
   try {
     const res = await client.act(action);
-    if (!res.ok) $('action-error').textContent = res.error ?? 'action rejected';
+    if (!res.ok) $('action-error').textContent = res.error ?? S().actionRejected;
     else {
       draftClaims = [];
       removedAuto = new Set();
@@ -423,10 +544,9 @@ async function send(action: Action) {
   }
 }
 
-let lastPendingKey = '';
-
 function renderActions() {
   const v = view!;
+  const s = S();
   const panel = $('actions');
   const pending = v.pending;
   const key = pending ? `${pending.kind}:${pending.round}:${v.events.length}` : `none:${v.thinking.join(',')}:${v.phase}`;
@@ -448,9 +568,9 @@ function renderActions() {
       h(
         'div',
         { class: 'waiting' },
-        h('button', { class: 'primary', onclick: () => location.reload() }, 'New game'),
-        recorder?.ready ? h('button', { onclick: () => saveReplay(note) }, 'Save replay') : null,
-        recorder?.ready ? h('button', { class: 'ghost', onclick: () => void copyReplay(note) }, 'Copy replay') : null,
+        h('button', { class: 'primary', onclick: () => location.reload() }, s.newGame),
+        recorder?.ready ? h('button', { onclick: () => saveReplay(note) }, s.saveReplay) : null,
+        recorder?.ready ? h('button', { class: 'ghost', onclick: () => void copyReplay(note) }, s.copyReplay) : null,
         note,
       ),
     );
@@ -460,8 +580,7 @@ function renderActions() {
   if (!pending) {
     const who = v.thinking.map(name);
     panel.replaceChildren(
-      h('div', { class: 'waiting' }, who.length ? `${who.join(', ')} ${who.length > 1 ? 'are' : 'is'} thinking…` : v.you ? 'Waiting…' : 'Watching the crew.'),
-      paceControl(),
+      h('div', { class: 'waiting' }, h('span', { class: 'status' }, who.length ? s.thinking(who.join(s.listSep), who.length) : v.you ? s.waiting : s.watching), paceControl()),
     );
     return;
   }
@@ -469,18 +588,28 @@ function renderActions() {
   const opts = (pending.options ?? []).filter((o) => o !== 'skip') as PlayerId[];
   switch (pending.kind) {
     case 'night': {
-      const verb = { drag: 'Drag under', scan: 'Ping with sonar', protect: 'Seal in the med bay', read: 'Read the file of' }[pending.nightAction ?? 'scan'];
+      const verb = s.verbs[pending.nightAction ?? 'scan'];
       panel.replaceChildren(
-        h('div', { class: 'prompt' }, `${verb}:`),
-        h('div', { class: 'targets' }, opts.map((id) => h('button', { onclick: () => void send({ kind: 'night', target: id }) }, name(id))), pending.allowNone ? h('button', { class: 'ghost', onclick: () => void send({ kind: 'night', target: null }) }, 'Nobody') : null),
+        h('div', { class: 'prompt' }, verb),
+        h(
+          'div',
+          { class: 'targets' },
+          opts.map((id) => h('button', { onclick: () => void send({ kind: 'night', target: id }) }, name(id))),
+          pending.allowNone ? h('button', { class: 'ghost', onclick: () => void send({ kind: 'night', target: null }) }, s.nobody) : null,
+        ),
         err,
       );
       return;
     }
     case 'vote':
       panel.replaceChildren(
-        h('div', { class: 'prompt' }, 'Vote to airlock:'),
-        h('div', { class: 'targets' }, opts.map((id) => h('button', { class: 'danger', onclick: () => void send({ kind: 'vote', target: id }) }, name(id))), h('button', { class: 'ghost', onclick: () => void send({ kind: 'vote', target: 'skip' }) }, 'Skip')),
+        h('div', { class: 'prompt' }, s.voteToAirlock),
+        h(
+          'div',
+          { class: 'targets' },
+          opts.map((id) => h('button', { class: 'danger', onclick: () => void send({ kind: 'vote', target: id }) }, name(id))),
+          h('button', { class: 'ghost', onclick: () => void send({ kind: 'vote', target: 'skip' }) }, s.skip),
+        ),
         err,
       );
       return;
@@ -493,7 +622,8 @@ function renderActions() {
 
 function speechComposer(kind: 'speak' | 'last_words', targets: PlayerId[]): HTMLElement {
   const v = view!;
-  const area = h('textarea', { placeholder: kind === 'speak' ? 'Say something to the crew… (e.g. "I pinged Bram last night, he is clean. I\'m voting Mara.")' : 'Your last words…', rows: 3 }) as HTMLTextAreaElement;
+  const s = S();
+  const area = h('textarea', { placeholder: kind === 'speak' ? s.speakPh : s.lastPh, rows: 3, 'aria-label': kind === 'speak' ? s.yourTurn : s.goingOut }) as HTMLTextAreaElement;
   const chips = h('div', { class: 'chips' });
   const auto = () => extractClaims(area.value, v.players, v.you, v.round).filter((c) => !removedAuto.has(JSON.stringify(c)));
   const all = () => {
@@ -519,15 +649,21 @@ function speechComposer(kind: 'speak' | 'last_words', targets: PlayerId[]): HTML
   };
   area.addEventListener('input', refresh);
 
-  const type = h('select', {}, ...['accuse', 'vouch', 'intend_vote', 'role', 'scan', 'clue', 'protect', 'read'].map((t) => h('option', { value: t }, t.replace('_', ' ')))) as HTMLSelectElement;
-  const target = h('select', {}, ...targets.map((id) => h('option', { value: id }, name(id))), h('option', { value: 'skip' }, 'skip')) as HTMLSelectElement;
+  const type = h(
+    'select',
+    { 'aria-label': s.addClaim },
+    ...['accuse', 'vouch', 'intend_vote', 'role', 'scan', 'clue', 'protect', 'read'].map((t) => h('option', { value: t }, s.claimTypes[t])),
+  ) as HTMLSelectElement;
+  const target = h('select', {}, ...targets.map((id) => h('option', { value: id }, name(id))), h('option', { value: 'skip' }, s.skip)) as HTMLSelectElement;
   const extra = h('select', {}) as HTMLSelectElement;
   const target2 = h('select', {}, ...targets.map((id) => h('option', { value: id }, name(id)))) as HTMLSelectElement;
   const target3 = h('select', {}, ...targets.map((id) => h('option', { value: id }, name(id)))) as HTMLSelectElement;
   const syncExtra = () => {
     const t = type.value;
     const roles = Object.keys(ROLES) as RoleId[];
-    extra.replaceChildren(...(t === 'scan' ? ['crew', 'undertow'] : t === 'role' || t === 'read' ? roles : []).map((o) => h('option', { value: o }, o)));
+    const options: [string, string][] =
+      t === 'scan' ? (['crew', 'undertow'] as Faction[]).map((f) => [f, faction(f)]) : t === 'role' || t === 'read' ? roles.map((r) => [r, roleName(r)]) : [];
+    extra.replaceChildren(...options.map(([value, label]) => h('option', { value }, label)));
     extra.hidden = !(t === 'scan' || t === 'role' || t === 'read');
     target.hidden = t === 'role';
     target2.hidden = target3.hidden = t !== 'clue';
@@ -559,7 +695,7 @@ function speechComposer(kind: 'speak' | 'last_words', targets: PlayerId[]): HTML
     void send(kind === 'speak' ? { kind: 'speak', speech } : { kind: 'last_words', speech });
   };
   area.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       submit();
     }
@@ -568,11 +704,11 @@ function speechComposer(kind: 'speak' | 'last_words', targets: PlayerId[]): HTML
   return h(
     'div',
     { class: 'composer' },
-    h('div', { class: 'prompt' }, kind === 'speak' ? 'Your turn to speak.' : 'You are going into the airlock. Last words:'),
+    h('div', { class: 'prompt' }, kind === 'speak' ? s.yourTurn : s.goingOut),
     area,
     chips,
-    h('div', { class: 'builder' }, h('span', { class: 'label' }, 'add claim'), type, target, target2, target3, extra, h('button', { class: 'ghost', onclick: add }, '+')),
-    h('div', { class: 'row' }, h('button', { class: 'primary', onclick: submit }, kind === 'speak' ? 'Speak' : 'Say it')),
+    h('div', { class: 'builder' }, h('span', { class: 'label' }, s.addClaim), type, target, target2, target3, extra, h('button', { class: 'ghost', type: 'button', onclick: add }, s.add)),
+    h('div', { class: 'row' }, h('span', { class: 'hint' }, s.enterHint), h('button', { class: 'primary', onclick: submit }, kind === 'speak' ? s.speak : s.sayIt)),
   );
 }
 
@@ -586,24 +722,25 @@ function saveReplay(note: HTMLElement) {
   document.body.append(a);
   a.click();
   a.remove();
-  note.textContent = 'Saved. Open it from the start screen to watch it again.';
+  note.textContent = S().saved;
 }
 
 async function copyReplay(note: HTMLElement) {
   const text = replayJson();
   try {
     await navigator.clipboard.writeText(text);
-    note.textContent = 'Copied. Paste it on the start screen to watch it again.';
+    note.textContent = S().copied;
   } catch {
     const area = h('textarea', { class: 'replay-dump', readonly: true }) as HTMLTextAreaElement;
     area.value = text;
-    note.replaceChildren('Copy this text:', area);
+    note.replaceChildren(S().copyThis, area);
     area.select();
   }
 }
 
 function replayControls(rc: ReplayClient): HTMLElement {
-  const slider = h('input', { type: 'range', min: '0', max: String(rc.length - 1), value: String(rc.index), 'aria-label': 'replay position', class: 'scrub' }) as HTMLInputElement;
+  const s = S();
+  const slider = h('input', { type: 'range', min: '0', max: String(rc.length - 1), value: String(rc.index), 'aria-label': s.replayPos, class: 'scrub' }) as HTMLInputElement;
   slider.addEventListener('input', () => rc.seek(Number(slider.value)));
   const btn = (label: string, title: string, fn: () => void, cls = '') => h('button', { class: cls, title, 'aria-label': title, onclick: fn }, label);
   const toggle = () => {
@@ -617,13 +754,13 @@ function replayControls(rc: ReplayClient): HTMLElement {
     h(
       'div',
       { class: 'row' },
-      btn('⏮', 'previous phase', () => rc.seekPhase(-1)),
-      btn('◀', 'step back', () => rc.seek(rc.index - 1)),
-      h('button', { class: 'primary play', title: 'play', 'aria-label': 'play', onclick: toggle }, '▶'),
-      btn('▶|', 'step forward', () => rc.seek(rc.index + 1)),
-      btn('⏭', 'next phase', () => rc.seekPhase(1)),
+      btn('«', s.prevPhase, () => rc.seekPhase(-1)),
+      btn('‹', s.stepBack, () => rc.seek(rc.index - 1)),
+      h('button', { class: 'primary play', title: s.play, 'aria-label': s.play, onclick: toggle }, s.play),
+      btn('›', s.stepFwd, () => rc.seek(rc.index + 1)),
+      btn('»', s.nextPhase, () => rc.seekPhase(1)),
       h('span', { class: 'hint pos' }),
-      h('button', { class: 'ghost', onclick: () => location.reload() }, 'Leave replay'),
+      h('button', { class: 'ghost', onclick: () => location.reload() }, s.leaveReplay),
     ),
     slider,
     paceControl(),
@@ -638,8 +775,8 @@ function updateReplayControls(rc: ReplayClient) {
   if (pos) pos.textContent = `${rc.index + 1} / ${rc.length}`;
   const play = panel.querySelector('.play') as HTMLButtonElement | null;
   if (play) {
-    play.textContent = rc.playing ? '⏸' : '▶';
-    play.title = rc.playing ? 'pause' : 'play';
+    play.textContent = rc.playing ? S().pause : S().play;
+    play.title = play.textContent;
     play.setAttribute('aria-label', play.title);
   }
 }
@@ -650,7 +787,7 @@ function paceControl(): HTMLElement {
     ($('pace-live') as HTMLInputElement).value = input.value;
     client?.setPace(Number(input.value));
   });
-  return h('label', { class: 'pace' }, 'pace', input);
+  return h('label', { class: 'pace' }, S().paceShort, input);
 }
 
 void initSetup();

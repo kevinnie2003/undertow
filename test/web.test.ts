@@ -99,3 +99,25 @@ describe('web client (in-browser, offline)', () => {
     expect(document.querySelector('#actions .pos')!.textContent).toMatch(/^(\d+) \/ \1$/);
   }, 30000);
 });
+
+describe('web client in Chinese', () => {
+  it('switches the interface and the AI crew to Chinese', async () => {
+    await boot();
+    (document.querySelector('.lang button[data-lang=zh]') as HTMLButtonElement).click();
+    expect(document.documentElement.lang).toBe('zh-CN');
+    expect(document.getElementById('start')!.textContent).toBe('下潜');
+    expect((document.getElementById('name') as HTMLInputElement).value).toBe('你');
+    (document.querySelector('input[value=watch]') as HTMLInputElement).checked = true;
+    (document.getElementById('pace') as HTMLInputElement).value = '0';
+    document.getElementById('start')!.click();
+    await until(() => !!document.querySelector('.log .end'));
+    const speeches = [...document.querySelectorAll('.log .speech .text')].map((e) => e.textContent ?? '');
+    expect(speeches.length).toBeGreaterThan(3);
+    for (const t of speeches) expect(t).toMatch(/[一-鿿]/);
+    expect(document.querySelector('.log .end .big')!.textContent).toMatch(/船员|暗流/);
+    // Switching back changes the interface at once.
+    (document.querySelector('.lang button[data-lang=en]') as HTMLButtonElement).click();
+    expect(document.querySelector('.log .end .big')!.textContent).toMatch(/crew|Undertow/);
+    localStorage.clear();
+  }, 30000);
+});

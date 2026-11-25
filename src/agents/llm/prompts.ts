@@ -1,4 +1,5 @@
 import { ROLES } from '../../engine/roles.js';
+import type { Lang } from '../../i18n/lang.js';
 import type { Claim, PlayerId, RoleId } from '../../engine/types.js';
 import type { Memory } from '../memory.js';
 import type { Persona } from '../personas.js';
@@ -38,9 +39,17 @@ export function roleBrief(role: RoleId, partners: string[]): string {
   return s;
 }
 
-export function systemPrompt(persona: Persona, name: string, role: RoleId, partnerNames: string[]): string {
-  return `${RULES}
+const LANGUAGE: Record<Lang, string> = {
+  en: '',
+  zh: `
+LANGUAGE
+The table is speaking Simplified Chinese. Write every "text" (speeches and last words), every "note", every "thought" and every "reason" in natural Simplified Chinese, as a native speaker would say it at the table. The Undertow call themselves 暗流 and the crew 船员; roles are 潜水员 (diver), 声呐员 (sonar), 医生 (medic), 档案员 (archivist), 溺亡者 (drowned) and 塞壬 (siren). Keep player names exactly as written. JSON keys, tool names, player ids and claim fields stay in English.
+`,
+};
 
+export function systemPrompt(persona: Persona, name: string, role: RoleId, partnerNames: string[], lang: Lang = 'en'): string {
+  return `${RULES}
+${LANGUAGE[lang]}
 You are playing as ${name}, the station's ${persona.job}. ${persona.description}
 Speak in character: natural, short table talk (1 to 4 sentences), no stage directions, no markdown.
 

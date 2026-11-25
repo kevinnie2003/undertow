@@ -1,6 +1,7 @@
 import { makeAgentFactory, type AgentKind } from '../agents/factory.js';
 import type { Action } from '../engine/types.js';
 import { GameSession, type ClientView } from '../runner/session.js';
+import { langRef, type Lang } from '../i18n/lang.js';
 
 export interface NewGameOptions {
   players: number;
@@ -9,6 +10,7 @@ export interface NewGameOptions {
   name: string;
   agent: AgentKind;
   paceMs: number;
+  lang: Lang;
 }
 
 export type View = ClientView & { usage?: { calls: number; inputTokens: number; outputTokens: number } };
@@ -17,15 +19,19 @@ export interface GameClient {
   subscribe(fn: (v: View) => void): void;
   act(action: Action): Promise<{ ok: boolean; error?: string }>;
   setPace(ms: number): void;
+  /** The language the AI crew speaks from now on. */
+  setLang(lang: Lang): void;
   stop(): void;
 }
 
 /** Runs the whole game in the browser. Works offline, with heuristic or mock-LLM agents. */
 export class LocalClient implements GameClient {
   private session: GameSession;
+  private lang = langRef();
   constructor(opts: NewGameOptions) {
     let session: GameSession | null = null;
-    const make = makeAgentFactory({ kind: opts.agent, seed: opts.seed, onTrace: (t) => session?.recordTrace(t) });
+    this.lang.current = opts.lang;
+    const make = makeAgentFactory({ kind: opts.agent, seed: opts.seed, onTrace: (t) => session?.recordTrace(t), lang: () => this.lang.current });
     session = new GameSession({
       players: opts.players,
       seed: opts.seed,
@@ -45,6 +51,9 @@ export class LocalClient implements GameClient {
   }
   setPace(ms: number) {
     this.session.paceMs = ms;
+  }
+  setLang(lang: Lang) {
+    this.lang.current = lang;
   }
   stop() {
     this.session.stop();
@@ -89,6 +98,14 @@ export class RemoteClient implements GameClient {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ paceMs: ms }),
+    });
+  }
+
+  setLang(lang: Lang) {
+    void fetch(`/api/games/${this.id}/lang?token=${encodeURIComponent(this.token)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ lang }),
     });
   }
 

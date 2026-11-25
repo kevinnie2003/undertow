@@ -32,3 +32,25 @@ export const PERSONAS: Persona[] = [
 export function personaFor(name: string): Persona {
   return PERSONAS.find((p) => p.name === name) ?? PERSONAS[0];
 }
+
+/** Chinese job titles and descriptions, keyed by persona name. Names stay as they are. */
+const ZH: Record<string, { job: string; description: string }> = {
+  'Ines Calloway': { job: '船壳工程师', description: '焊了二十年耐压焊缝。心里怎么想就怎么说，只说一遍。' },
+  'Bram Okafor': { job: '站上厨师', description: '记得每个人喝什么咖啡。讨厌争执，但会留意谁没来吃饭。' },
+  'Tove Lindqvist': { job: '海洋生物学家', description: '什么都记在本子上。用概率思考，也用概率说话。' },
+  'Ravi Mehta': { job: '通讯官', description: '线路上每一声杂音都听得见。一害怕说话就快。' },
+  'Mara Quill': { job: '潜水队长', description: '潜过三百次水，每次都能讲个笑话。' },
+  'Jonah Pike': { job: '反应堆技师', description: '海军出身。先要计划，再要投票。' },
+  'Sefa Tuilagi': { job: '医务官', description: '声音平稳，手也稳。会问别人过得怎么样，并且认真听回答。' },
+  'Odile Marchetti': { job: '地质学家', description: '对待每个论点都像对待岩芯样本：一层一层看。' },
+  'Kasimir Wren': { job: '无人机驾驶员', description: '整天操纵摄像机在黑暗里穿行。对戏剧性的场面无动于衷。' },
+  'Hana Sato': { job: '数据分析师', description: '数字上很出色，被人盯着看就不太行了。' },
+};
+
+export function personaJob(p: { name: string; job: string }, lang: 'en' | 'zh'): string {
+  return lang === 'zh' ? (ZH[p.name]?.job ?? p.job) : p.job;
+}
+
+export function personaDescription(p: Persona, lang: 'en' | 'zh'): string {
+  return lang === 'zh' ? (ZH[p.name]?.description ?? p.description) : p.description;
+}

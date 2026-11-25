@@ -7,47 +7,66 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body data-phase="setup">
-  <div class="sea"></div>
-  <header>
-    <div class="brand">UNDERTOW <span>Meridian-9 · 4,000 m</span></div>
-    <div id="phase"></div>
-    <div id="hull"></div>
-    <div id="meta"></div>
+  <header class="bar">
+    <div class="brand"><span class="mark">Undertow</span><span class="sub" data-t="brandSub"></span></div>
+    <div class="cell phase"><span id="phase"></span></div>
+    <div class="cell" id="hull"></div>
+    <div class="cell meta" id="meta"></div>
+    <div class="lang" role="group" data-t-aria="langLabel">
+      <button type="button" data-lang="en">EN</button>
+      <button type="button" data-lang="zh">中文</button>
+    </div>
   </header>
 
   <main id="setup" class="setup">
+    <div class="gauge" aria-hidden="true">
+      <span style="top:0%">0 m</span><span style="top:25%">1000</span><span style="top:50%">2000</span><span style="top:75%">3000</span><span style="top:100%">4000</span>
+    </div>
     <section class="intro">
-      <h1>Something came up from the trench.</h1>
-      <p>You are one of a handful of crew on a research station at the bottom of the sea. Some of the others are not themselves any more. Talk, bluff, deduce and vote, alongside AI crewmates who keep private memories, track beliefs about everyone and lie when it suits them.</p>
+      <p class="kicker" data-t="setupKicker"></p>
+      <h1 data-t="setupTitle"></h1>
+      <p class="lede" data-t="setupLede"></p>
+      <dl class="facts">
+        <div><dt data-t="factsCrew"></dt><dd data-t="factsCrewValue"></dd></div>
+        <div><dt data-t="factsAi"></dt><dd data-t="factsAiValue"></dd></div>
+        <div><dt data-t="factsPlay"></dt><dd data-t="factsPlayValue"></dd></div>
+      </dl>
     </section>
     <section class="form">
-      <label>Your name <input id="name" value="You" maxlength="24" /></label>
-      <label>Crew size
+      <h2 data-t="formTitle"></h2>
+      <label class="field"><span data-t="yourName"></span><input id="name" maxlength="24" /></label>
+      <label class="field"><span data-t="crewSize"></span>
         <select id="players">
           <option>5</option><option>6</option><option selected>7</option><option>8</option><option>9</option><option>10</option>
         </select>
       </label>
-      <div class="modes">
-        <label><input type="radio" name="mode" value="play" checked /> Play</label>
-        <label><input type="radio" name="mode" value="watch" /> Watch an all-AI game (see inside their minds)</label>
+      <fieldset class="field modes">
+        <legend data-t="modeLabel"></legend>
+        <label><input type="radio" name="mode" value="play" checked /> <span data-t="modePlay"></span></label>
+        <label><input type="radio" name="mode" value="watch" /> <span data-t="modeWatch"></span></label>
+      </fieldset>
+      <label class="field"><span data-t="aiCrew"></span><select id="agent"></select></label>
+      <div class="pair">
+        <label class="field"><span data-t="seed"></span><input id="seed" type="number" /></label>
+        <label class="field"><span><span data-t="pace"></span> <output id="pace-out"></output></span><input id="pace" type="range" min="0" max="3000" step="100" value="900" /></label>
       </div>
-      <label>AI crew <select id="agent"></select></label>
-      <label>Seed <input id="seed" type="number" /></label>
-      <label>Pace (ms per AI line) <input id="pace" type="range" min="0" max="3000" step="100" value="900" /></label>
-      <button id="start" class="primary">Descend</button>
-      <p id="server-note" class="hint"></p>
+      <button id="start" class="primary wide" data-t="descend"></button>
+      <p id="server-note" class="note"></p>
       <details class="replay-load">
-        <summary>Watch a replay</summary>
-        <label>Replay file <input id="replay-file" type="file" accept=".json,application/json" /></label>
-        <label>or paste one <textarea id="replay-paste" rows="3" placeholder="Paste a copied replay here"></textarea></label>
-        <button id="replay-paste-go">Watch</button>
+        <summary data-t="replayTitle"></summary>
+        <label class="field"><span data-t="replayFile"></span><input id="replay-file" type="file" accept=".json,application/json" /></label>
+        <label class="field"><span data-t="replayPaste"></span><textarea id="replay-paste" rows="3" data-t-ph="replayPastePh"></textarea></label>
+        <button id="replay-paste-go" data-t="replayWatch"></button>
         <p id="replay-error" class="err"></p>
       </details>
     </section>
   </main>
 
   <main id="game" class="game" hidden>
-    <aside id="roster" class="roster"></aside>
+    <aside class="roster-col">
+      <h3 data-t="roster"></h3>
+      <div id="roster" class="roster"></div>
+    </aside>
     <section class="center">
       <div id="log" class="log"></div>
       <div id="actions" class="actions"></div>

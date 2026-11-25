@@ -1,6 +1,7 @@
 import { HeuristicAgent } from '../heuristic.js';
 import type { Persona } from '../personas.js';
 import { Rng } from '../../engine/rng.js';
+import type { Lang } from '../../i18n/lang.js';
 import type { Action, PlayerId } from '../../engine/types.js';
 import type { CompletionRequest, CompletionResult, LLMProvider } from './provider.js';
 
@@ -19,9 +20,9 @@ export class MockLLMProvider implements LLMProvider {
   constructor(
     id: PlayerId,
     persona: Persona,
-    private opts: { seed?: number; noise?: number } = {},
+    private opts: { seed?: number; noise?: number; lang?: () => Lang } = {},
   ) {
-    this.brain = new HeuristicAgent({ id, persona, seed: opts.seed });
+    this.brain = new HeuristicAgent({ id, persona, seed: opts.seed, lang: opts.lang });
     this.rng = new Rng((opts.seed ?? 7) ^ 0x5bd1e995);
   }
 
@@ -37,7 +38,8 @@ export class MockLLMProvider implements LLMProvider {
     // Look at the numbers once before speaking, the way a careful player would.
     const lastUser = req.messages[req.messages.length - 1]?.content ?? '';
     if (obs.request.kind === 'speak' && step === 0 && !lastUser.startsWith('OBSERVATION')) {
-      return { text: JSON.stringify({ thought: 'Let me check the odds first.', tool: 'estimate', args: {} }), usage };
+      const thought = this.opts.lang?.() === 'zh' ? '先看看概率。' : 'Let me check the odds first.';
+      return { text: JSON.stringify({ thought, tool: 'estimate', args: {} }), usage };
     }
     const action = this.brain.decideSync(obs);
     return { text: JSON.stringify(toStep(action, this.brain.insight().thought ?? '')), usage };

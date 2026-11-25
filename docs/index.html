@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Undertow · Meridian-9</title>
+  <style>
+/*
+ * Undertow: a station instrument panel and a crew logbook.
+ * Flat dark surfaces, hairline rules, square corners, one sodium-lamp accent.
+ * No web fonts: the stacks below fall back to good system faces, CJK included.
+ */
+:root {
+  --ink: #0c1213;
+  --ink-2: #111819;
+  --ink-3: #172122;
+  --rule: #253132;
+  --rule-strong: #3a4a4b;
+  --fg: #dde3df;
+  --fg-2: #9aa7a2;
+  --fg-3: #66746f;
+  --sodium: #f08a2c;
+  --sodium-dim: #7a4a1f;
+  --crew: #7ec3b2;
+  --under: #e5573f;
+  --warn: #d8b24c;
+  --night: #8fb0c8;
+
+  --mono: 'JetBrains Mono', 'IBM Plex Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', 'PingFang SC', 'Microsoft YaHei', monospace;
+  --sans: 'IBM Plex Sans', 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Source Han Sans SC', 'Microsoft YaHei', sans-serif;
+  --display: 'Barlow Condensed', 'Roboto Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, 'PingFang SC', 'Noto Sans CJK SC', 'Source Han Sans SC', 'Microsoft YaHei', sans-serif;
+
+  /* Type scale: 11 / 13 / 15 / 18 / 28 / 60 */
+  --t-xs: 11px;
+  --t-sm: 13px;
+  --t-md: 15px;
+  --t-lg: 18px;
+  --t-xl: 28px;
+  --t-hero: clamp(40px, 6vw, 64px);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+body {
+  background: var(--ink);
+  color: var(--fg);
+  font: 400 var(--t-md) / 1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+[hidden] {
+  display: none !important;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+:focus-visible {
+  outline: 2px solid var(--sodium);
+  outline-offset: 2px;
+}
+::selection {
+  background: var(--sodium-dim);
+}
+
+/* Small caps-style instrument labels. */
+.k,
+.label,
+.kicker,
+h2,
+h3,
+dt,
+legend,
+.field > span,
+.prompt,
+.tag,
+.badge,
+.lock,
+summary {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+body[data-lang='zh'] :is(.k, .label, .kicker, h2, h3, dt, legend, .field > span, .prompt, .tag, .badge, .lock, summary) {
+  letter-spacing: 0.06em;
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Header strip                                                        */
+/* ------------------------------------------------------------------ */
+
+.bar {
+  display: flex;
+  align-items: stretch;
+  height: 52px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--ink-2);
+  flex: none;
+}
+.bar > * {
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  border-right: 1px solid var(--rule);
+  gap: 10px;
+  white-space: nowrap;
+}
+.brand .mark {
+  font-family: var(--display);
+  font-stretch: condensed;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.brand .sub {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+}
+.phase {
+  min-width: 200px;
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  color: var(--sodium);
+}
+body[data-phase='night'] .phase {
+  color: var(--night);
+}
+body[data-phase='setup'] .phase,
+body[data-phase='setup'] #hull,
+body[data-phase='setup'] #meta {
+  visibility: hidden;
+}
+#hull .k {
+  color: var(--fg-3);
+}
+#hull .segs {
+  display: flex;
+  gap: 3px;
+}
+#hull .seg {
+  width: 14px;
+  height: 10px;
+  border: 1px solid var(--fg-2);
+}
+#hull .seg.ok {
+  background: var(--fg-2);
+}
+#hull .seg.lost {
+  border-color: var(--under);
+  background: transparent;
+}
+#hull .num {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+}
+.meta {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lang {
+  border-right: 0;
+  padding: 0 12px;
+  gap: 0;
+}
+.lang button {
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  color: var(--fg-2);
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 0;
+}
+.lang button + button {
+  border-left: 0;
+}
+.lang button[aria-pressed='true'] {
+  background: var(--fg);
+  color: var(--ink);
+  border-color: var(--fg);
+}
+
+/* ------------------------------------------------------------------ */
+/* Controls                                                            */
+/* ------------------------------------------------------------------ */
+
+button {
+  border: 1px solid var(--rule-strong);
+  background: var(--ink-3);
+  padding: 8px 14px;
+  border-radius: 0;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+}
+button:hover {
+  border-color: var(--fg-2);
+}
+button.primary {
+  background: var(--sodium);
+  border-color: var(--sodium);
+  color: #1a0f05;
+  font-weight: 600;
+}
+button.primary:hover {
+  background: #ff9a3e;
+}
+button.ghost {
+  background: transparent;
+  color: var(--fg-2);
+}
+button.danger {
+  border-color: var(--under);
+  color: #f3b3a7;
+  background: transparent;
+}
+button.danger:hover {
+  background: var(--under);
+  color: var(--ink);
+}
+button.wide {
+  width: 100%;
+  padding: 13px;
+  font-size: var(--t-md);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+input:not([type='radio']):not([type='range']):not([type='file']),
+select,
+textarea {
+  background: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 0;
+  padding: 8px 10px;
+}
+input[type='number'],
+select {
+  font-family: var(--mono);
+}
+input[type='range'],
+input[type='radio'] {
+  accent-color: var(--sodium);
+}
+textarea {
+  width: 100%;
+  resize: vertical;
+  line-height: 1.5;
+}
+.hint,
+.note {
+  color: var(--fg-3);
+  font-size: var(--t-sm);
+}
+.err {
+  color: var(--under);
+  font-size: var(--t-sm);
+}
+
+/* ------------------------------------------------------------------ */
+/* Setup                                                               */
+/* ------------------------------------------------------------------ */
+
+.setup {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 0 56px;
+  max-width: 1240px;
+  width: 100%;
+  padding: 56px 40px 64px 24px;
+}
+.gauge {
+  position: relative;
+  border-right: 1px solid var(--rule-strong);
+  margin: 6px 0;
+  background: repeating-linear-gradient(to bottom, var(--rule-strong) 0 1px, transparent 1px 2.5%) right / 8px 100% no-repeat,
+    repeating-linear-gradient(to bottom, var(--fg-3) 0 1px, transparent 1px 25%) right / 18px 100% no-repeat;
+}
+.gauge span {
+  position: absolute;
+  right: 24px;
+  transform: translateY(-50%);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--fg-3);
+}
+.gauge span:last-child {
+  color: var(--sodium);
+}
+.intro {
+  padding-top: 4px;
+}
+.kicker {
+  color: var(--sodium);
+  margin: 0 0 18px;
+}
+.intro h1 {
+  font-family: var(--display);
+  font-stretch: condensed;
+  font-weight: 700;
+  font-size: var(--t-hero);
+  line-height: 0.98;
+  letter-spacing: -0.005em;
+  margin: 0 0 28px;
+  max-width: 13ch;
+}
+body[data-lang='zh'] .intro h1 {
+  line-height: 1.15;
+  max-width: 11em;
+  letter-spacing: 0.02em;
+}
+.lede {
+  font-size: var(--t-lg);
+  line-height: 1.6;
+  color: var(--fg-2);
+  max-width: 34em;
+  margin: 0 0 40px;
+}
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--rule-strong);
+  margin: 0;
+  max-width: 36em;
+}
+.facts div {
+  padding: 12px 16px 0 0;
+}
+.facts div + div {
+  border-left: 1px solid var(--rule);
+  padding-left: 16px;
+}
+.facts dt {
+  color: var(--fg-3);
+  margin-bottom: 4px;
+}
+.facts dd {
+  margin: 0;
+  font-size: var(--t-sm);
+}
+.form {
+  border: 1px solid var(--rule);
+  background: var(--ink-2);
+  padding: 22px 24px 18px;
+  align-self: start;
+}
+.form h2 {
+  margin: 0 0 6px;
+  color: var(--fg-2);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+.field {
+  display: grid;
+  gap: 6px;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  margin: 0;
+}
+.field > span,
+.field legend {
+  color: var(--fg-3);
+  padding: 0;
+}
+.field output {
+  color: var(--fg-2);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.modes {
+  gap: 4px;
+}
+.modes legend {
+  margin-bottom: 6px;
+}
+.modes label {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: var(--t-sm);
+  cursor: pointer;
+}
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 18px;
+}
+#start {
+  margin-top: 18px;
+}
+.note {
+  margin: 10px 0 0;
+}
+.replay-load {
+  margin-top: 16px;
+  border-top: 1px solid var(--rule);
+  padding-top: 10px;
+}
+.replay-load summary {
+  cursor: pointer;
+  color: var(--fg-2);
+}
+.replay-load .field:last-of-type {
+  border-bottom: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Game layout                                                         */
+/* ------------------------------------------------------------------ */
+
+.game {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr) 320px;
+  height: calc(100vh - 52px);
+}
+.roster-col,
+.side {
+  overflow-y: auto;
+  background: var(--ink-2);
+}
+.roster-col {
+  border-right: 1px solid var(--rule);
+}
+.roster-col h3,
+.side h3 {
+  color: var(--fg-3);
+  margin: 0;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--rule);
+}
+.side {
+  border-left: 1px solid var(--rule);
+  padding-bottom: 24px;
+}
+.side h3 {
+  margin-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+.side h3:first-child {
+  margin-top: 0;
+  border-top: 0;
+}
+.side > .hint,
+.side > p,
+.side > ul,
+.side > div:not(.rolecard),
+.side > details {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+
+/* Roster */
+.card {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 14px 11px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  border-left: 2px solid transparent;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: var(--t-md);
+}
+button.card:hover {
+  background: var(--ink-3);
+}
+.card.selected {
+  border-left-color: var(--sodium);
+  background: var(--ink-3);
+}
+.card .seat {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+  padding-top: 3px;
+}
+.card .who {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.card .nm {
+  font-weight: 600;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.card .job {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+}
+.card .dots {
+  color: var(--sodium);
+}
+.card.dead .nm {
+  color: var(--fg-3);
+  text-decoration: line-through;
+  text-decoration-color: var(--rule-strong);
+}
+.card.you .seat {
+  color: var(--sodium);
+}
+.card.partner {
+  border-left-color: var(--under);
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.badges:empty {
+  display: none;
+}
+.badge,
+.tag {
+  border: 1px solid var(--rule-strong);
+  padding: 1px 5px;
+  font-size: 10px;
+  color: var(--fg-2);
+  line-height: 1.5;
+}
+.badge.role.crew {
+  border-color: var(--crew);
+  color: var(--crew);
+}
+.badge.role.undertow,
+.tag.undertow {
+  border-color: var(--under);
+  color: var(--under);
+}
+.badge.fate {
+  color: var(--fg-3);
+}
+.badge.votes {
+  border-color: var(--sodium-dim);
+  color: var(--sodium);
+}
+.susbar {
+  height: 2px;
+  background: var(--rule);
+  margin-top: 6px;
+}
+.susbar span {
+  display: block;
+  height: 100%;
+  background: var(--sodium);
+}
+
+/* ------------------------------------------------------------------ */
+/* Log                                                                 */
+/* ------------------------------------------------------------------ */
+
+.center {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 32px 32px;
+  scroll-behavior: smooth;
+}
+.log > * {
+  max-width: 820px;
+}
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 26px 0 12px;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sodium);
+}
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rule-strong);
+}
+.divider.night {
+  color: var(--night);
+}
+.sys {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  color: var(--fg-2);
+  padding: 5px 0 5px 12px;
+  border-left: 2px solid var(--rule-strong);
+  margin: 6px 0;
+}
+body[data-lang='zh'] .sys {
+  font-family: var(--sans);
+}
+.sys.intro {
+  color: var(--fg);
+  border-left-color: var(--fg-2);
+}
+.sys.you {
+  color: var(--sodium);
+  border-left-color: var(--sodium);
+}
+.sys.death {
+  color: #f2a596;
+  border-left-color: var(--under);
+}
+.sys.intel {
+  color: var(--crew);
+  border-left-color: var(--crew);
+}
+.sys.undertow {
+  color: #f2a596;
+  border-left-color: var(--under);
+  border-left-style: dashed;
+}
+.sys.warn {
+  color: var(--warn);
+  border-left-color: var(--warn);
+}
+.sys.calm {
+  color: var(--fg-3);
+}
+.lock {
+  flex: none;
+  font-size: 9.5px;
+  color: var(--fg-3);
+  border: 1px solid var(--rule-strong);
+  padding: 0 4px;
+}
+.speech {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(0, 1fr);
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.speech .speaker {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  padding-top: 2px;
+  color: var(--fg-2);
+  min-width: 0;
+}
+.speech .speaker .seat {
+  color: var(--fg-3);
+  flex: none;
+}
+.speech .speaker .sn {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.speech.mine .speaker {
+  color: var(--sodium);
+}
+.speech .text {
+  margin: 0;
+  max-width: 62ch;
+}
+body[data-lang='zh'] .speech .text {
+  max-width: 38em;
+  line-height: 1.75;
+}
+.speech.last .body {
+  border-left: 2px solid var(--under);
+  padding-left: 12px;
+}
+.speech.last .tag {
+  display: inline-block;
+  color: var(--under);
+  border-color: var(--under);
+  margin-bottom: 4px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+.chips:empty {
+  display: none;
+}
+.chip {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+  border: 1px solid var(--rule-strong);
+  padding: 1px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.chip.hostile {
+  color: #f2a596;
+  border-color: #6b3328;
+}
+.chip.vouch,
+.chip.scan:not(.hostile) {
+  color: var(--crew);
+  border-color: #345a51;
+}
+.chip .x {
+  border: 0;
+  background: transparent;
+  padding: 0 2px;
+  color: inherit;
+  font-size: var(--t-sm);
+  line-height: 1;
+}
+.votes {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  background: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+}
+.votes .tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  color: var(--fg);
+}
+.votes .tally b {
+  color: var(--sodium);
+  font-weight: 600;
+}
+.votes .rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  margin-top: 6px;
+  color: var(--fg-3);
+  font-size: var(--t-xs);
+}
+.end {
+  margin: 28px 0 8px;
+  border-top: 4px solid var(--crew);
+  padding-top: 14px;
+}
+.end.undertow {
+  border-top-color: var(--under);
+}
+.end .big {
+  font-family: var(--display);
+  font-stretch: condensed;
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+.end p {
+  color: var(--fg-2);
+  margin: 6px 0 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Actions                                                             */
+/* ------------------------------------------------------------------ */
+
+.actions {
+  flex: none;
+  border-top: 1px solid var(--rule-strong);
+  background: var(--ink-2);
+  padding: 14px 32px 16px;
+}
+.actions:empty {
+  display: none;
+}
+.prompt {
+  color: var(--sodium);
+  margin-bottom: 10px;
+}
+.targets,
+.waiting,
+.replay .row,
+.composer .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.waiting .status {
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  color: var(--fg-2);
+  margin-right: auto;
+}
+.composer .row {
+  justify-content: space-between;
+  margin-top: 10px;
+}
+.builder {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 10px;
+}
+.builder .label {
+  color: var(--fg-3);
+  margin-right: 4px;
+}
+.builder select {
+  padding: 5px 8px;
+  font-size: var(--t-sm);
+}
+.builder button {
+  padding: 5px 12px;
+}
+.pace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--fg-3);
+}
+.replay .scrub {
+  width: 100%;
+  margin: 12px 0 8px;
+}
+.replay .row button {
+  min-width: 40px;
+}
+.replay .pos {
+  font-family: var(--mono);
+  margin: 0 auto 0 8px;
+}
+.replay-dump {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  height: 80px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Side panel                                                          */
+/* ------------------------------------------------------------------ */
+
+.rolecard {
+  padding: 16px;
+  border-top: 4px solid var(--crew);
+  border-bottom: 1px solid var(--rule);
+}
+.rolecard.undertow {
+  border-top-color: var(--under);
+}
+.rolecard .rk {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.rolecard .rn {
+  font-family: var(--display);
+  font-stretch: condensed;
+  font-weight: 700;
+  font-size: var(--t-xl);
+  line-height: 1.15;
+  margin: 4px 0 8px;
+}
+.rolecard p {
+  margin: 0 0 8px;
+  font-size: var(--t-sm);
+  color: var(--fg-2);
+}
+.rolecard .partners {
+  color: var(--under);
+}
+.intel .sys {
+  font-size: var(--t-xs);
+}
+.setup-list {
+  list-style: none;
+  padding: 0;
+  margin-top: 10px;
+  font-size: var(--t-sm);
+}
+.setup-list li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  gap: 10px;
+}
+.setup-list b {
+  font-family: var(--mono);
+  min-width: 1.5em;
+  color: var(--crew);
+}
+.setup-list li.undertow b {
+  color: var(--under);
+}
+.rules {
+  margin-top: 16px;
+}
+.rules summary {
+  cursor: pointer;
+  color: var(--fg-2);
+}
+.rules p {
+  font-size: var(--t-sm);
+  color: var(--fg-2);
+}
+.side > .hint {
+  margin-top: 10px;
+}
+.mindhead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 12px;
+  margin-bottom: 8px;
+  font-size: var(--t-lg);
+}
+.beliefs {
+  display: grid;
+  gap: 5px;
+}
+.brow {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr 2rem;
+  gap: 8px;
+  align-items: center;
+  font-size: var(--t-sm);
+}
+.brow .bn {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.brow.dead {
+  opacity: 0.45;
+}
+.bbar {
+  height: 6px;
+  background: var(--rule);
+}
+.bbar .fill {
+  display: block;
+  height: 100%;
+  background: var(--fg-2);
+}
+.bbar .fill.crew {
+  background: var(--crew);
+}
+.bbar .fill.undertow {
+  background: var(--under);
+}
+.brow .bv {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+  text-align: right;
+}
+.thought,
+.notes,
+.traces {
+  margin-top: 16px;
+}
+.thought .label,
+.notes .label,
+.traces .label {
+  color: var(--fg-3);
+  display: block;
+  margin-bottom: 4px;
+}
+.thought p {
+  margin: 0;
+  font-size: var(--t-sm);
+  border-left: 2px solid var(--sodium);
+  padding-left: 10px;
+}
+.notes ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: var(--t-sm);
+  color: var(--fg-2);
+}
+.traces details {
+  border-top: 1px solid var(--rule);
+  padding: 6px 0;
+}
+.traces summary {
+  cursor: pointer;
+  color: var(--fg-2);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.step {
+  font-size: var(--t-xs);
+  color: var(--fg-2);
+  margin: 6px 0;
+}
+.step code {
+  font-family: var(--mono);
+  color: var(--sodium);
+}
+.step .obs {
+  color: var(--fg-3);
+  font-family: var(--mono);
+  white-space: pre-wrap;
+  margin-top: 2px;
+}
+.step .err {
+  font-family: var(--mono);
+}
+
+/* ------------------------------------------------------------------ */
+/* Narrow screens                                                      */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 1100px) {
+  .game {
+    grid-template-columns: 220px minmax(0, 1fr);
+    height: auto;
+  }
+  .side {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+  .log {
+    max-height: 70vh;
+  }
+}
+@media (max-width: 860px) {
+  .setup {
+    grid-template-columns: 1fr;
+    padding: 32px 20px 48px;
+  }
+  .gauge {
+    display: none;
+  }
+  .form {
+    margin-top: 32px;
+  }
+  .bar {
+    height: auto;
+    flex-wrap: wrap;
+  }
+  .bar > * {
+    padding: 10px 12px;
+  }
+  .brand .sub,
+  .meta {
+    display: none;
+  }
+  .game {
+    grid-template-columns: 1fr;
+  }
+  .roster-col {
+    border-right: 0;
+  }
+  .roster {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .speech {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .speech .speaker {
+    justify-content: flex-start;
+    text-align: left;
+  }
+  .log,
+  .actions {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+</style>
+</head>
+<body data-phase="setup">
+  <header class="bar">
+    <div class="brand"><span class="mark">Undertow</span><span class="sub" data-t="brandSub"></span></div>
+    <div class="cell phase"><span id="phase"></span></div>
+    <div class="cell" id="hull"></div>
+    <div class="cell meta" id="meta"></div>
+    <div class="lang" role="group" data-t-aria="langLabel">
+      <button type="button" data-lang="en">EN</button>
+      <button type="button" data-lang="zh">中文</button>
+    </div>
+  </header>
+
+  <main id="setup" class="setup">
+    <div class="gauge" aria-hidden="true">
+      <span style="top:0%">0 m</span><span style="top:25%">1000</span><span style="top:50%">2000</span><span style="top:75%">3000</span><span style="top:100%">4000</span>
+    </div>
+    <section class="intro">
+      <p class="kicker" data-t="setupKicker"></p>
+      <h1 data-t="setupTitle"></h1>
+      <p class="lede" data-t="setupLede"></p>
+      <dl class="facts">
+        <div><dt data-t="factsCrew"></dt><dd data-t="factsCrewValue"></dd></div>
+        <div><dt data-t="factsAi"></dt><dd data-t="factsAiValue"></dd></div>
+        <div><dt data-t="factsPlay"></dt><dd data-t="factsPlayValue"></dd></div>
+      </dl>
+    </section>
+    <section class="form">
+      <h2 data-t="formTitle"></h2>
+      <label class="field"><span data-t="yourName"></span><input id="name" maxlength="24" /></label>
+      <label class="field"><span data-t="crewSize"></span>
+        <select id="players">
+          <option>5</option><option>6</option><option selected>7</option><option>8</option><option>9</option><option>10</option>
+        </select>
+      </label>
+      <fieldset class="field modes">
+        <legend data-t="modeLabel"></legend>
+        <label><input type="radio" name="mode" value="play" checked /> <span data-t="modePlay"></span></label>
+        <label><input type="radio" name="mode" value="watch" /> <span data-t="modeWatch"></span></label>
+      </fieldset>
+      <label class="field"><span data-t="aiCrew"></span><select id="agent"></select></label>
+      <div class="pair">
+        <label class="field"><span data-t="seed"></span><input id="seed" type="number" /></label>
+        <label class="field"><span><span data-t="pace"></span> <output id="pace-out"></output></span><input id="pace" type="range" min="0" max="3000" step="100" value="900" /></label>
+      </div>
+      <button id="start" class="primary wide" data-t="descend"></button>
+      <p id="server-note" class="note"></p>
+      <details class="replay-load">
+        <summary data-t="replayTitle"></summary>
+        <label class="field"><span data-t="replayFile"></span><input id="replay-file" type="file" accept=".json,application/json" /></label>
+        <label class="field"><span data-t="replayPaste"></span><textarea id="replay-paste" rows="3" data-t-ph="replayPastePh"></textarea></label>
+        <button id="replay-paste-go" data-t="replayWatch"></button>
+        <p id="replay-error" class="err"></p>
+      </details>
+    </section>
+  </main>
+
+  <main id="game" class="game" hidden>
+    <aside class="roster-col">
+      <h3 data-t="roster"></h3>
+      <div id="roster" class="roster"></div>
+    </aside>
+    <section class="center">
+      <div id="log" class="log"></div>
+      <div id="actions" class="actions"></div>
+    </section>
+    <aside id="side" class="side"></aside>
+  </main>
+  <input id="pace-live" type="hidden" value="900" />
+  <script type="module">
+var Tt=Object.defineProperty;var Lt=(t,e,n)=>e in t?Tt(t,e,{enumerable:!0,configurable:!0,writable:!0,value:n}):t[e]=n;var p=(t,e,n)=>Lt(t,typeof e!="symbol"?e+"":e,n);var A={diver:{id:"diver",name:"Diver",faction:"crew",unique:!1,blurb:"Crew. No night action, but the station logs sometimes hand you a clue: a short list of names that contains at least one Undertow."},sonar:{id:"sonar",name:"Sonar Tech",faction:"crew",nightAction:"scan",unique:!0,blurb:"Crew. Each night, ping one player and hear their echo: crew or undertow. A Siren echoes as crew."},medic:{id:"medic",name:"Medic",faction:"crew",nightAction:"protect",unique:!0,blurb:"Crew. Each night, seal one player in the med bay. If the Undertow come for them, they survive. Never the same player two nights running."},archivist:{id:"archivist",name:"Archivist",faction:"crew",nightAction:"read",unique:!0,blurb:"Crew. Nobody learns who the lost really were, except you. Each night, read the personnel log of one lost player and learn their true role."},drowned:{id:"drowned",name:"Drowned",faction:"undertow",nightAction:"drag",unique:!1,blurb:"Undertow. You know your fellow Undertow. Each night you choose together whom to drag under. Win when you match the crew in number, or when the hull gives out."},siren:{id:"siren",name:"Siren",faction:"undertow",nightAction:"drag",unique:!0,blurb:"Undertow. Like the Drowned, but your echo reads as crew to the Sonar Tech."}};function E(t){return A[t].faction}function Be(t){return t==="siren"?"crew":A[t].faction}function We(t){switch(t){case 5:return["siren","sonar","diver","diver","diver"];case 6:return["drowned","siren","sonar","medic","diver","diver"];case 7:return["drowned","siren","sonar","medic","diver","diver","diver"];case 8:return["drowned","drowned","siren","sonar","medic","archivist","diver","diver"];case 9:return["drowned","drowned","siren","sonar","medic","archivist","diver","diver","diver"];case 10:return["drowned","drowned","siren","sonar","medic","archivist","diver","diver","diver","diver"];default:throw new Error(`Undertow supports 5 to 10 players, got ${t}`)}}function Ke(t){return{5:1,6:.4,7:0,8:.8,9:.1,10:.1}[t]??1}function pe(t){let e={diver:0,sonar:0,medic:0,archivist:0,drowned:0,siren:0};for(let n of t)e[n]++;return e}var Le=Object.keys(A);var he=[{name:"Ines Calloway",job:"hull engineer",voice:"blunt",description:"Twenty years of welding pressure seams. Says what she thinks, once.",aggression:.8,boldness:.6,openness:.6},{name:"Bram Okafor",job:"station cook",voice:"warm",description:"Knows everyone's coffee order. Hates conflict, but notices who skips meals.",aggression:.35,boldness:.4,openness:.5},{name:"Tove Lindqvist",job:"marine biologist",voice:"analytical",description:"Keeps a notebook of everything. Thinks in probabilities and says so.",aggression:.55,boldness:.5,openness:.7},{name:"Ravi Mehta",job:"comms officer",voice:"nervous",description:"Hears every crackle on the line. Talks fast when he is scared.",aggression:.45,boldness:.3,openness:.4},{name:"Mara Quill",job:"dive lead",voice:"dry",description:"Has done three hundred dives and has a joke for each.",aggression:.6,boldness:.75,openness:.5},{name:"Jonah Pike",job:"reactor tech",voice:"blunt",description:"Ex-navy. Wants a plan and a vote, in that order.",aggression:.7,boldness:.55,openness:.55},{name:"Sefa Tuilagi",job:"medical officer",voice:"warm",description:"Calm voice, steady hands. Asks people how they are, and listens to the answer.",aggression:.4,boldness:.45,openness:.45},{name:"Odile Marchetti",job:"geologist",voice:"analytical",description:"Treats every argument like a core sample: layer by layer.",aggression:.5,boldness:.6,openness:.65},{name:"Kasimir Wren",job:"drone pilot",voice:"dry",description:"Spends his days steering a camera through the dark. Unimpressed by drama.",aggression:.5,boldness:.7,openness:.4},{name:"Hana Sato",job:"data analyst",voice:"nervous",description:"Brilliant with numbers, less so with being stared at.",aggression:.4,boldness:.35,openness:.6}];function ze(t){return he.find(e=>e.name===t)??he[0]}var Nt={"Ines Calloway":{job:"\u8239\u58F3\u5DE5\u7A0B\u5E08",description:"\u710A\u4E86\u4E8C\u5341\u5E74\u8010\u538B\u710A\u7F1D\u3002\u5FC3\u91CC\u600E\u4E48\u60F3\u5C31\u600E\u4E48\u8BF4\uFF0C\u53EA\u8BF4\u4E00\u904D\u3002"},"Bram Okafor":{job:"\u7AD9\u4E0A\u53A8\u5E08",description:"\u8BB0\u5F97\u6BCF\u4E2A\u4EBA\u559D\u4EC0\u4E48\u5496\u5561\u3002\u8BA8\u538C\u4E89\u6267\uFF0C\u4F46\u4F1A\u7559\u610F\u8C01\u6CA1\u6765\u5403\u996D\u3002"},"Tove Lindqvist":{job:"\u6D77\u6D0B\u751F\u7269\u5B66\u5BB6",description:"\u4EC0\u4E48\u90FD\u8BB0\u5728\u672C\u5B50\u4E0A\u3002\u7528\u6982\u7387\u601D\u8003\uFF0C\u4E5F\u7528\u6982\u7387\u8BF4\u8BDD\u3002"},"Ravi Mehta":{job:"\u901A\u8BAF\u5B98",description:"\u7EBF\u8DEF\u4E0A\u6BCF\u4E00\u58F0\u6742\u97F3\u90FD\u542C\u5F97\u89C1\u3002\u4E00\u5BB3\u6015\u8BF4\u8BDD\u5C31\u5FEB\u3002"},"Mara Quill":{job:"\u6F5C\u6C34\u961F\u957F",description:"\u6F5C\u8FC7\u4E09\u767E\u6B21\u6C34\uFF0C\u6BCF\u6B21\u90FD\u80FD\u8BB2\u4E2A\u7B11\u8BDD\u3002"},"Jonah Pike":{job:"\u53CD\u5E94\u5806\u6280\u5E08",description:"\u6D77\u519B\u51FA\u8EAB\u3002\u5148\u8981\u8BA1\u5212\uFF0C\u518D\u8981\u6295\u7968\u3002"},"Sefa Tuilagi":{job:"\u533B\u52A1\u5B98",description:"\u58F0\u97F3\u5E73\u7A33\uFF0C\u624B\u4E5F\u7A33\u3002\u4F1A\u95EE\u522B\u4EBA\u8FC7\u5F97\u600E\u4E48\u6837\uFF0C\u5E76\u4E14\u8BA4\u771F\u542C\u56DE\u7B54\u3002"},"Odile Marchetti":{job:"\u5730\u8D28\u5B66\u5BB6",description:"\u5BF9\u5F85\u6BCF\u4E2A\u8BBA\u70B9\u90FD\u50CF\u5BF9\u5F85\u5CA9\u82AF\u6837\u672C\uFF1A\u4E00\u5C42\u4E00\u5C42\u770B\u3002"},"Kasimir Wren":{job:"\u65E0\u4EBA\u673A\u9A7E\u9A76\u5458",description:"\u6574\u5929\u64CD\u7EB5\u6444\u50CF\u673A\u5728\u9ED1\u6697\u91CC\u7A7F\u884C\u3002\u5BF9\u620F\u5267\u6027\u7684\u573A\u9762\u65E0\u52A8\u4E8E\u8877\u3002"},"Hana Sato":{job:"\u6570\u636E\u5206\u6790\u5E08",description:"\u6570\u5B57\u4E0A\u5F88\u51FA\u8272\uFF0C\u88AB\u4EBA\u76EF\u7740\u770B\u5C31\u4E0D\u592A\u884C\u4E86\u3002"}};function Je(t,e){return e==="zh"?Nt[t.name]?.job??t.job:t.job}function me(t){return t==="zh"?"zh":"en"}function Ye(t="en"){return{current:t}}var Ze={diver:{name:"\u6F5C\u6C34\u5458",blurb:"\u8239\u5458\u3002\u591C\u91CC\u6CA1\u6709\u884C\u52A8\uFF0C\u4F46\u7AD9\u52A1\u65E5\u5FD7\u5076\u5C14\u4F1A\u7ED9\u4F60\u4E00\u6761\u7EBF\u7D22\uFF1A\u4E00\u4EFD\u77ED\u540D\u5355\uFF0C\u5176\u4E2D\u81F3\u5C11\u6709\u4E00\u4E2A\u6697\u6D41\u3002"},sonar:{name:"\u58F0\u5450\u5458",blurb:"\u8239\u5458\u3002\u6BCF\u665A\u63A2\u6D4B\u4E00\u540D\u73A9\u5BB6\uFF0C\u542C\u56DE\u58F0\u5224\u65AD\u4ED6\u662F\u8239\u5458\u8FD8\u662F\u6697\u6D41\u3002\u585E\u58EC\u7684\u56DE\u58F0\u542C\u8D77\u6765\u50CF\u8239\u5458\u3002"},medic:{name:"\u533B\u751F",blurb:"\u8239\u5458\u3002\u6BCF\u665A\u628A\u4E00\u540D\u73A9\u5BB6\u5C01\u8FDB\u533B\u7597\u8231\u3002\u6697\u6D41\u6765\u62D6\u4EBA\u65F6\uFF0C\u88AB\u5C01\u7684\u4EBA\u80FD\u6D3B\u4E0B\u6765\u3002\u4E0D\u80FD\u8FDE\u7EED\u4E24\u665A\u5C01\u540C\u4E00\u4E2A\u4EBA\u3002"},archivist:{name:"\u6863\u6848\u5458",blurb:"\u8239\u5458\u3002\u9664\u4E86\u4F60\uFF0C\u6CA1\u4EBA\u77E5\u9053\u9047\u96BE\u8005\u7684\u771F\u5B9E\u8EAB\u4EFD\u3002\u6BCF\u665A\u53EF\u4EE5\u67E5\u9605\u4E00\u540D\u9047\u96BE\u8005\u7684\u4EBA\u4E8B\u6863\u6848\uFF0C\u5F97\u77E5\u4ED6\u7684\u771F\u5B9E\u89D2\u8272\u3002"},drowned:{name:"\u6EBA\u4EA1\u8005",blurb:"\u6697\u6D41\u3002\u4F60\u8BA4\u8BC6\u5176\u4ED6\u6697\u6D41\u3002\u6BCF\u665A\u4F60\u4EEC\u4E00\u8D77\u9009\u4E00\u4E2A\u4EBA\u62D6\u4E0B\u6C34\u3002\u4EBA\u6570\u4E0E\u8239\u5458\u6301\u5E73\uFF0C\u6216\u8239\u58F3\u6491\u4E0D\u4F4F\u65F6\uFF0C\u4F60\u4EEC\u83B7\u80DC\u3002"},siren:{name:"\u585E\u58EC",blurb:"\u6697\u6D41\u3002\u548C\u6EBA\u4EA1\u8005\u4E00\u6837\uFF0C\u4F46\u58F0\u5450\u5458\u542C\u5230\u7684\u4F60\u7684\u56DE\u58F0\u662F\u8239\u5458\u3002"}};function te(t,e){return e==="zh"?Ze[t].name:A[t].name}function Qe(t,e){return e==="zh"?Ze[t].blurb:A[t].blurb}function Xe(t,e){return e==="zh"?t==="crew"?"\u8239\u5458":"\u6697\u6D41":t==="crew"?"crew":"Undertow"}function nt(t,e,n,r){let s=[],a=` ${t.toLowerCase()} `,i=[["sonar",/\bi(?:'m| am)(?: the)? (?:sonar|sonar tech)\b/],["medic",/\bi(?:'m| am)(?: the)? medic\b/],["archivist",/\bi(?:'m| am)(?: the)? archivist\b/],["diver",/\bi(?:'m| am)(?: a| just a)? diver\b/]];for(let[d,m]of i)m.test(a)&&s.push({type:"role",role:d});let l=/我是(?:那个|一名|一个|个)?(声呐员|声呐|医生|档案员|潜水员)/.exec(a);if(l){let d={\u58F0\u5450\u5458:"sonar",\u58F0\u5450:"sonar",\u533B\u751F:"medic",\u6863\u6848\u5458:"archivist",\u6F5C\u6C34\u5458:"diver"}[l[1]];s.some(m=>m.type==="role"&&m.role===d)||s.push({type:"role",role:d})}let o=e.filter(d=>d.id!==n);for(let d of o){let m=d.name.split(" ")[0].toLowerCase(),k=d.name.toLowerCase(),v=`(?:${tt(k)}|${tt(m)})`,y=a.split(/[.!?;。！？；]+/).filter(f=>new RegExp(`\\b${v}\\b`).test(f));for(let f of y)_t(f,v,d.id,r,s)||(new RegExp(`\\bvot(?:e|ing)(?: for)? ${v}\\b`).test(f)?s.push({type:"intend_vote",target:d.id}):/\b(undertow|drowned|siren|suspicious|lying|liar|sus|guilty|off)\b/.test(f)&&!/\bnot (undertow|suspicious|lying)\b/.test(f)?/\b(pinged|scanned|echo)\b/.test(f)&&/\bundertow\b/.test(f)?s.push({type:"scan",round:r,target:d.id,result:"undertow"}):s.push({type:"accuse",target:d.id}):/\b(clean|crew|trust|innocent|fine|safe)\b/.test(f)&&(/\b(pinged|scanned|echo)\b/.test(f)?s.push({type:"scan",round:r,target:d.id,result:"crew"}):s.push({type:"vouch",target:d.id})))}(/\b(skip|no vote|hold my vote)\b/.test(a)||/弃票|跳过|不投|先不投/.test(a))&&s.push({type:"intend_vote",target:"skip"});let h=new Set;return s.filter(d=>{let m=JSON.stringify(d);return h.has(m)?!1:(h.add(m),!0)})}var Et=/探测|声呐|回声|扫描|扫了/,Ot=/暗流|溺亡者|塞壬|可疑|撒谎|说谎|骗子|有问题|不对劲|嫌疑/,Mt=/清白|信任|相信|没问题|船员|自己人|干净|安全|无辜/,et=/不是(?:暗流|溺亡者|塞壬)|不可疑|没撒谎|没说谎/;function _t(t,e,n,r,s){if(!/[\u4e00-\u9fff]/.test(t))return!1;if(new RegExp(`(?:\u6295(?:\u7968\u7ED9|\u7ED9)?|\u7968\u7ED9|\u7968\u6295)\\s*${e}`).test(t)&&!new RegExp(`\u4E0D\u6295\\s*${e}`).test(t))return s.push({type:"intend_vote",target:n}),!0;let a=Et.test(t);return Ot.test(t)&&!et.test(t)?(s.push(a&&/暗流/.test(t)?{type:"scan",round:r,target:n,result:"undertow"}:{type:"accuse",target:n}),!0):Mt.test(t)||et.test(t)?(s.push(a?{type:"scan",round:r,target:n,result:"crew"}:{type:"vouch",target:n}),!0):!1}function tt(t){return t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}var M=class{constructor(e){p(this,"state",e);this.state=e>>>0}next(){this.state=this.state+1831565813>>>0;let e=this.state;return e=Math.imul(e^e>>>15,e|1),e^=e+Math.imul(e^e>>>7,e|61),((e^e>>>14)>>>0)/4294967296}int(e){return Math.floor(this.next()*e)}pick(e){if(e.length===0)throw new Error("pick from empty list");return e[this.int(e.length)]}shuffle(e){let n=e.slice();for(let r=n.length-1;r>0;r--){let s=this.int(r+1);[n[r],n[s]]=[n[s],n[r]]}return n}chance(e){return this.next()<e}};function rt(t){let e=2166136261;for(let n=0;n<t.length;n++)e^=t.charCodeAt(n),e=Math.imul(e,16777619);return e>>>0}var ge=class{constructor(e){p(this,"me",e);p(this,"lastSeq",-1);p(this,"role",null);p(this,"partners",[]);p(this,"names",new Map);p(this,"scans",[]);p(this,"protects",[]);p(this,"reads",[]);p(this,"clues",[]);p(this,"claims",[]);p(this,"speeches",[]);p(this,"votes",[]);p(this,"deaths",[]);p(this,"quietNights",[]);p(this,"proposals",[]);p(this,"hullLosses",[])}ingest(e){for(let n of e)n.seq<=this.lastSeq||(this.lastSeq=n.seq,this.apply(n))}apply(e){let n=e.data;switch(n.type){case"game_start":for(let r of n.players)this.names.set(r.id,r.name);break;case"role_assigned":n.player===this.me&&(this.role=n.role,this.partners=n.partners);break;case"scan_result":this.scans.push({round:e.round,target:n.target,result:n.result});break;case"protect_result":this.protects.push({round:e.round,target:n.target,saved:n.saved});break;case"read_result":this.reads.push({round:e.round,target:n.target,role:n.role});break;case"clue":this.clues.push({round:e.round,suspects:n.suspects});break;case"undertow_proposal":this.proposals.push({round:e.round,player:n.player,target:n.target,note:n.note});break;case"dragged":this.deaths.push({round:e.round,player:n.player,fate:"dragged"});break;case"quiet_night":this.quietNights.push(e.round);break;case"speech":case"last_words":{let r=n.type==="last_words";this.speeches.push({round:e.round,speaker:n.player,text:n.speech.text,lastWords:r});for(let s of n.speech.claims)this.claims.push({round:e.round,speaker:n.player,claim:s,lastWords:r});break}case"votes":this.votes.push({round:e.round,votes:n.votes,airlocked:null});break;case"airlocked":{let r=this.votes[this.votes.length-1];r&&r.round===e.round&&(r.airlocked=n.player),this.deaths.push({round:e.round,player:n.player,fate:"airlocked",faction:n.faction});break}case"hull":n.delta<0&&this.hullLosses.push(e.round);break;default:break}}get faction(){return this.role?E(this.role):null}name(e){return this.names.get(e)??e}isDead(e){return this.deaths.some(n=>n.player===e)}claimsBy(e){return this.claims.filter(n=>n.speaker===e)}saidBefore(e){return this.claims.some(n=>n.speaker===this.me&&e(n.claim))}claimedRoles(){let e=new Map;for(let n of this.claims){let r=ye(n.claim);r&&e.set(n.speaker,r)}return e}accusationsAgainst(e,n){return this.claims.filter(r=>(n===void 0||r.round===n)&&(r.claim.type==="accuse"&&r.claim.target===e||r.claim.type==="scan"&&r.claim.target===e&&r.claim.result==="undertow"||r.claim.type==="intend_vote"&&r.claim.target===e))}intentions(e){let n=new Map;for(let r of this.claims)r.round===e&&r.claim.type==="intend_vote"&&n.set(r.speaker,r.claim.target);return n}};function ye(t){switch(t.type){case"role":return t.role;case"scan":return"sonar";case"protect":return"medic";case"read":return"archivist";case"clue":return"diver";default:return null}}var jt={eps:.03,crewAccuseHit:1.25,crewVouchHit:1.15,crewIntendHit:1.1,liarAccusePartner:.35,liarVouchPartner:1.6,liarIntendPartner:.5,liarScanPartner:.2,liarCoverPartner:1.5,liarCluePartner:.6,partnerVote:.4,crewVoteHit:1.15,roleSwitchCrew:.1,pileOnTeam:1.8,normaliseTargets:!0};function Ee(t){let e={...jt,...t.params},{players:n,alive:r,setup:s,memory:a}=t,i=n.length,l=new Map(n.map((u,w)=>[u,w])),o=u=>1<<l.get(u),h=s.drowned+s.siren,d=h>0?s.siren/h:0,m=t.perspective==="private",k=a.me,v=0,y=0,f=[],P=[];if(m&&a.role){if(E(a.role)==="undertow"){v|=o(k);for(let u of a.partners)v|=o(u);for(let u of n)v&o(u)||(y|=o(u))}else y|=o(k);for(let u of a.scans)if(u.result==="undertow")v|=o(u.target);else if(d===0)y|=o(u.target);else{let w=o(u.target);P.push(b=>b&w?d:1)}for(let u of a.reads)E(u.role)==="undertow"?v|=o(u.target):y|=o(u.target);for(let u of a.clues)f.push(u.suspects.reduce((w,b)=>w|o(b),0))}for(let u of a.deaths)u.fate==="dragged"&&(y|=o(u.player)),u.faction==="crew"&&(y|=o(u.player)),u.faction==="undertow"&&(v|=o(u.player));let g=0;for(let u of r)g|=o(u);let S=r.size,L=(1<<i)-1,q=u=>{let w=L;for(let b of a.deaths)(b.round<u||b.round===u&&b.fate==="dragged")&&(w&=~o(b.player));return w},ee=new Map,xt=u=>(ee.has(u)||ee.set(u,q(u)),ee.get(u)),Ce=(u,w,b,I,$)=>{let T=o(u),N=o(w);if(!e.normaliseTargets)return V=>V&T?V&N?$:1:V&N?I:1;let G=xt(b)&~T,de=Ne(G);return V=>{let ue=Ne(V&G);return V&T?(V&N?$:1)*de/(de-ue+$*ue):(V&N?I:1)*de/(de-ue+I*ue)}},J=a.claims.filter(u=>!(m&&u.speaker===k)),oe=new Map;for(let u of J){let w=ye(u.claim);w&&(oe.has(u.speaker)||oe.set(u.speaker,new Set),oe.get(u.speaker).add(w))}let Ge=new Map;for(let u of J){let w=ye(u.claim);w&&Ge.set(u.speaker,w)}for(let[u,w]of oe){let b=o(u);for(let I of w)(A[I].faction==="undertow"||s[I]===0)&&P.push($=>$&b?1:e.eps);w.size>1&&P.push(I=>I&b?1:e.roleSwitchCrew)}for(let u of["sonar","medic","archivist","diver"]){let w=[...Ge].filter(([,I])=>I===u).map(([I])=>o(I)),b=m&&a.role===u?1:0;w.length+b<=s[u]||P.push(I=>{let $=b;for(let N of w)I&N||$++;let T=$-s[u];return T>0?Math.pow(e.eps,T):1})}let ie=new Map;for(let u of J)u.claim.type==="clue"&&(ie.has(u.claim.round)||ie.set(u.claim.round,new Set),ie.get(u.claim.round).add(u.speaker));for(let[u,w]of ie){let b=m&&a.clues.some($=>$.round===u)?1:0;if(w.size+b<=1)continue;let I=[...w].map(o);P.push($=>{let T=b;for(let N of I)$&N||T++;return T>1?Math.pow(e.eps,T-1):1})}for(let u of J){let w=o(u.speaker),b=u.claim;switch(b.type){case"scan":{let I=o(b.target);b.result==="undertow"?P.push($=>$&w?$&I?e.liarScanPartner:1:$&I?1:e.eps):P.push($=>$&w?$&I?e.liarCoverPartner:1:$&I?Math.max(e.eps,d):1);break}case"read":{let I=o(b.target),$=E(b.role)==="undertow";P.push(T=>T&w?T&I?$?e.liarScanPartner:e.liarCoverPartner:1:!!(T&I)===$?1:e.eps);break}case"clue":{let I=b.suspects.reduce(($,T)=>$|o(T),0);P.push($=>$&w?($&~w&I)!==0?e.liarCluePartner:1:($&I)!==0?1:e.eps);break}case"accuse":{P.push(Ce(u.speaker,b.target,u.round,e.crewAccuseHit,e.liarAccusePartner));break}case"protect":{let I=o(b.target);P.push($=>$&w?$&I?e.liarVouchPartner:1:$&I?e.eps:1);break}case"vouch":{let I=o(b.target);P.push($=>$&w?$&I?e.liarVouchPartner:1:$&I?1/e.crewVouchHit:1);break}case"intend_vote":{if(b.target==="skip")break;P.push(Ce(u.speaker,b.target,u.round,e.crewIntendHit,e.liarIntendPartner));break}default:break}}let At=(u,w)=>J.some(b=>b.speaker===u&&(b.claim.type==="scan"&&b.claim.target===w||b.claim.type==="read"&&b.claim.target===w||b.claim.type==="clue"&&b.claim.suspects.includes(w))),le=new Map;for(let u of J){let w=u.claim;if(u.lastWords||w.type!=="accuse"&&w.type!=="intend_vote"||w.target==="skip"||At(u.speaker,w.target))continue;let b=`${u.round}:${w.target}`;le.has(b)||le.set(b,new Set),le.get(b).add(u.speaker)}for(let[u,w]of le){if(w.size<2)continue;let b=u.slice(u.indexOf(":")+1),I=o(b),$=[...w].map(o);P.push(T=>{if(T&I)return 1;let N=0;for(let G of $)T&G&&N++;return N>=2?e.pileOnTeam:1})}for(let u of a.votes)for(let[w,b]of Object.entries(u.votes))b==="skip"||m&&w===k||P.push(Ce(w,b,u.round,e.crewVoteHit,e.partnerVote));let Te=(u,w)=>{let b=[],I=0;return Ht(i,h,$=>{if(($&v)!==v||($&y)!==0)return;if(w){for(let G of f)if(($&G)===0)return}let T=Ne($&g);if(T===0||T>=S-T)return;let N=1;if(u)for(let G of P)N*=G($);N>0&&(b.push({h:$,w:N}),I+=N)}),{weights:b,total:I}},Ve=!0,H=Te(!0,!0);H.total===0&&(Ve=!1,H=Te(!0,!1)),H.total===0&&(H=Te(!1,!1));let K=new Map;for(let u of n)K.set(u,0);let ce={h:0,w:-1};for(let{h:u,w}of H.weights){w>ce.w&&(ce={h:u,w});for(let b=0;b<i;b++)u&1<<b&&K.set(n[b],K.get(n[b])+w)}if(H.total>0)for(let u of n)K.set(u,K.get(u)/H.total);else for(let u of n)K.set(u,h/i);let Ct=n.filter((u,w)=>ce.h&1<<w);return{p:K,hypotheses:H.weights.length,consistent:Ve,map:{set:Ct,prob:H.total>0?ce.w/H.total:0}}}function Ne(t){let e=0;for(;t;)t&=t-1,e++;return e}function Ht(t,e,n){if(e===0){n(0);return}if(e>t)return;let r=(1<<e)-1,s=1<<t;for(;r<s;){n(r);let a=r&-r,i=r+a;r=((i^r)>>>2)/a|i}}var Ut={openers:{blunt:["Right.","Listen.","No time for this.","Here it is.",""],warm:["Okay, everyone.","Hey, all.","I know this is hard.","Deep breath, team.",""],analytical:["Let me lay this out.","Looking at what we know:","Data first.","A few observations.",""],nervous:["Um, okay.","I, uh, have to say this.","Sorry, this is a lot.","Okay okay okay.",""],dry:["Well.","So.","Right then.",""]},loss:{blunt:[t=>`${t} is gone. Let's make it count.`,t=>`They took ${t}. Enough.`],warm:[t=>`I can't believe ${t} is gone.`,t=>`Poor ${t}. Let's do right by them.`],analytical:[t=>`We lost ${t} overnight, which tells us something.`,t=>`${t} was taken, so ${t} was crew. Let's use that.`],nervous:[t=>`${t} is... gone. Okay. Okay.`,t=>`They got ${t}. I could be next.`],dry:[t=>`So ${t} didn't make it to breakfast.`,t=>`One fewer for coffee. Goodbye, ${t}.`]},calm:{blunt:["Nobody taken. Someone got sealed in, or someone got lucky."],warm:["Everyone made it through the night. Thank goodness."],analytical:["A quiet night. Either the med bay worked, or they held back."],nervous:["Everyone's still here? Good. Good."],dry:["Lovely night. Nobody drowned.","Another fine morning on the sea floor."]},quiet:{blunt:["I have nothing solid yet. Watching.","Nothing to report. Someone give me a reason.","Talk is cheap. I want to see votes."],warm:["I don't have much yet, I'm listening to everyone.","Nothing concrete from me. Let's keep talking.","I trust most of you right now, honestly."],analytical:["Too little data to move the needle yet.","My priors haven't shifted much.","Nothing conclusive. I'm tracking who claims what."],nervous:["I don't know anything, I swear.","I've got nothing, sorry.","Can someone else go first next time?"],dry:["Nothing to add. Shocking, I know.","I'll save my brilliance for later.","No news from my corner of the station."]},last:["Before I go:","Last thing from me:","For the record:"],defend:["I am not Undertow.","You have the wrong person.","Stop looking at me, I'm crew."],join:" ",sentence(t,e,n,r){let s=a=>te(a,"en");switch(t.type){case"role":return r.pick([`I'm the ${s(t.role)}.`,`I'll say it: I'm the ${s(t.role)}.`,`Cards on the table: I'm the ${s(t.role)}.`]);case"scan":return t.result==="undertow"?r.pick([`Night ${t.round} I pinged ${n(t.target)}. The echo came back wrong. Undertow.`,`${n(t.target)} pinged Undertow on night ${t.round}.`]):r.pick([`Night ${t.round}: ${n(t.target)} echoed clean, crew.`,`${n(t.target)} is clean, I pinged them night ${t.round}.`]);case"protect":return`I sealed ${n(t.target)} in the med bay on night ${t.round}.`;case"read":return`I pulled ${n(t.target)}'s file on night ${t.round}: ${s(t.role)}.`;case"clue":return r.pick([`The station log gave me a list on night ${t.round}: ${fe(t.suspects,n,", "," and ")}. At least one of them is Undertow.`,`My log clue from night ${t.round} says one of ${fe(t.suspects,n,", "," and ")} is Undertow.`]);case"accuse":{let a=n(t.target),i={blunt:[`${a} is Undertow. I'd bet my air on it.`,`${a} doesn't add up.`],warm:[`I'm sorry, ${a}, but you worry me.`,`Something about ${a} feels off to me.`],analytical:[`${a} is my top suspect on the evidence.`,`The numbers keep pointing at ${a}.`],nervous:[`I think it might be ${a}? Maybe?`,`${a} is scaring me a little.`],dry:[`My money's on ${a}. Nothing personal.`,`${a}, you're doing a great impression of Undertow.`]};return r.pick(i[e])}case"vouch":return r.pick([`I trust ${n(t.target)}.`,`${n(t.target)} is fine by me.`,`Leave ${n(t.target)} alone, they're with us.`]);case"intend_vote":return t.target==="skip"?r.pick(["I'm holding my vote this time.","I'll skip unless something changes."]):r.pick([`My vote goes to ${n(t.target)}.`,`I'm voting ${n(t.target)}.`,`${n(t.target)} gets my vote.`])}}},Dt={openers:{blunt:["\u597D\u3002","\u542C\u7740\u3002","\u6CA1\u65F6\u95F4\u78E8\u8E6D\u4E86\u3002","\u6211\u76F4\u8BF4\u3002",""],warm:["\u597D\u4E86\uFF0C\u5927\u5BB6\u3002","\u5404\u4F4D\uFF0C\u542C\u6211\u8BF4\u3002","\u6211\u77E5\u9053\u8FD9\u5F88\u96BE\u3002","\u5927\u5BB6\u6DF1\u547C\u5438\u3002",""],analytical:["\u6211\u6765\u68B3\u7406\u4E00\u4E0B\u3002","\u770B\u770B\u6211\u4EEC\u77E5\u9053\u4EC0\u4E48\uFF1A","\u5148\u770B\u6570\u636E\u3002","\u6211\u6709\u51E0\u70B9\u89C2\u5BDF\u3002",""],nervous:["\u5443\uFF0C\u597D\u5427\u3002","\u6211\u3001\u6211\u5F97\u8BF4\u4E00\u53E5\u3002","\u62B1\u6B49\uFF0C\u4FE1\u606F\u6709\u70B9\u591A\u3002","\u597D\u597D\u597D\u3002",""],dry:["\u55EF\u3002","\u90A3\u4E48\u3002","\u884C\u5427\u3002",""]},loss:{blunt:[t=>`${t}\u6CA1\u4E86\u3002\u522B\u8BA9\u8FD9\u767D\u767D\u727A\u7272\u3002`,t=>`\u4ED6\u4EEC\u5E26\u8D70\u4E86${t}\u3002\u591F\u4E86\u3002`],warm:[t=>`\u771F\u4E0D\u6562\u76F8\u4FE1${t}\u5C31\u8FD9\u4E48\u8D70\u4E86\u3002`,t=>`\u53EF\u601C\u7684${t}\u3002\u6211\u4EEC\u5F97\u5BF9\u5F97\u8D77${t}\u3002`],analytical:[t=>`\u6628\u665A\u6211\u4EEC\u5931\u53BB\u4E86${t}\uFF0C\u8FD9\u672C\u8EAB\u5C31\u662F\u4FE1\u606F\u3002`,t=>`${t}\u88AB\u62D6\u8D70\u4E86\uFF0C\u8BF4\u660E${t}\u662F\u8239\u5458\u3002\u6211\u4EEC\u8981\u7528\u597D\u8FD9\u4E00\u70B9\u3002`],nervous:[t=>`${t}\u2026\u2026\u6CA1\u4E86\u3002\u597D\u5427\u3002\u597D\u5427\u3002`,t=>`\u4ED6\u4EEC\u6293\u8D70\u4E86${t}\u3002\u4E0B\u4E00\u4E2A\u53EF\u80FD\u5C31\u662F\u6211\u3002`],dry:[t=>`\u770B\u6765${t}\u6CA1\u8D76\u4E0A\u65E9\u996D\u3002`,t=>`\u5C11\u4E86\u4E00\u4E2A\u4EBA\u559D\u5496\u5561\u3002\u518D\u89C1\uFF0C${t}\u3002`]},calm:{blunt:["\u6CA1\u4EBA\u88AB\u5E26\u8D70\u3002\u8981\u4E48\u6709\u4EBA\u88AB\u5C01\u8FDB\u4E86\u533B\u7597\u8231\uFF0C\u8981\u4E48\u6709\u4EBA\u8D70\u8FD0\u3002"],warm:["\u5927\u5BB6\u90FD\u71AC\u8FC7\u4E86\u8FD9\u4E00\u591C\u3002\u8C22\u5929\u8C22\u5730\u3002"],analytical:["\u5E73\u9759\u7684\u4E00\u591C\u3002\u8981\u4E48\u533B\u7597\u8231\u8D77\u4E86\u4F5C\u7528\uFF0C\u8981\u4E48\u4ED6\u4EEC\u6309\u5175\u4E0D\u52A8\u3002"],nervous:["\u5927\u5BB6\u90FD\u8FD8\u5728\uFF1F\u597D\u3002\u597D\u3002"],dry:["\u7F8E\u597D\u7684\u4E00\u591C\uFF0C\u6CA1\u4EBA\u6DF9\u6B7B\u3002","\u6D77\u5E95\u53C8\u4E00\u4E2A\u7F8E\u597D\u7684\u65E9\u6668\u3002"]},quiet:{blunt:["\u6211\u8FD8\u6CA1\u6709\u786E\u51FF\u7684\u4E1C\u897F\u3002\u5148\u770B\u7740\u3002","\u6CA1\u4EC0\u4E48\u53EF\u62A5\u544A\u7684\u3002\u8C01\u7ED9\u6211\u4E2A\u7406\u7531\u3002","\u5634\u4E0A\u8BF4\u8BF4\u4E0D\u7B97\u6570\uFF0C\u6211\u8981\u770B\u6295\u7968\u3002"],warm:["\u6211\u8FD8\u6CA1\u4EC0\u4E48\u5934\u7EEA\uFF0C\u5728\u542C\u5927\u5BB6\u8BF4\u3002","\u6211\u8FD9\u8FB9\u6CA1\u6709\u5177\u4F53\u7684\u3002\u6211\u4EEC\u7EE7\u7EED\u804A\u3002","\u8BF4\u5B9E\u8BDD\uFF0C\u73B0\u5728\u6211\u4FE1\u4EFB\u4F60\u4EEC\u5927\u591A\u6570\u4EBA\u3002"],analytical:["\u6570\u636E\u8FD8\u592A\u5C11\uFF0C\u5224\u65AD\u52A8\u4E0D\u4E86\u3002","\u6211\u7684\u5148\u9A8C\u6CA1\u600E\u4E48\u53D8\u3002","\u8FD8\u6CA1\u6709\u5B9A\u8BBA\u3002\u6211\u5728\u8BB0\u8C01\u58F0\u79F0\u4E86\u4EC0\u4E48\u3002"],nervous:["\u6211\u4EC0\u4E48\u90FD\u4E0D\u77E5\u9053\uFF0C\u6211\u53D1\u8A93\u3002","\u6211\u8FD9\u8FB9\u4EC0\u4E48\u90FD\u6CA1\u6709\uFF0C\u62B1\u6B49\u3002","\u4E0B\u6B21\u80FD\u4E0D\u80FD\u8BA9\u522B\u4EBA\u5148\u8BF4\uFF1F"],dry:["\u6CA1\u4EC0\u4E48\u53EF\u8865\u5145\u7684\u3002\u5F88\u610F\u5916\u5427\u3002","\u6211\u7684\u9AD8\u89C1\u7559\u7740\u4EE5\u540E\u518D\u8BF4\u3002","\u6211\u8FD9\u4E2A\u89D2\u843D\u6CA1\u4EC0\u4E48\u65B0\u95FB\u3002"]},last:["\u8D70\u4E4B\u524D\u6211\u8BF4\u4E00\u53E5\uFF1A","\u6700\u540E\u4E00\u4EF6\u4E8B\uFF1A","\u8BB0\u5F55\u5728\u6848\uFF1A"],defend:["\u6211\u4E0D\u662F\u6697\u6D41\u3002","\u4F60\u4EEC\u627E\u9519\u4EBA\u4E86\u3002","\u522B\u76EF\u7740\u6211\uFF0C\u6211\u662F\u8239\u5458\u3002"],join:"",sentence(t,e,n,r){let s=a=>te(a,"zh");switch(t.type){case"role":return r.pick([`\u6211\u662F${s(t.role)}\u3002`,`\u6211\u76F4\u8BF4\u4E86\uFF1A\u6211\u662F${s(t.role)}\u3002`,`\u644A\u724C\u5427\uFF1A\u6211\u662F${s(t.role)}\u3002`]);case"scan":return t.result==="undertow"?r.pick([`\u7B2C${t.round}\u665A\u6211\u63A2\u6D4B\u4E86${n(t.target)}\uFF0C\u56DE\u58F0\u4E0D\u5BF9\u52B2\u3002\u662F\u6697\u6D41\u3002`,`\u7B2C${t.round}\u665A${n(t.target)}\u7684\u56DE\u58F0\u662F\u6697\u6D41\u3002`]):r.pick([`\u7B2C${t.round}\u665A\uFF1A${n(t.target)}\u7684\u56DE\u58F0\u5E72\u51C0\uFF0C\u662F\u8239\u5458\u3002`,`${n(t.target)}\u662F\u6E05\u767D\u7684\uFF0C\u6211\u7B2C${t.round}\u665A\u63A2\u6D4B\u8FC7\u3002`]);case"protect":return`\u7B2C${t.round}\u665A\u6211\u628A${n(t.target)}\u5C01\u8FDB\u4E86\u533B\u7597\u8231\u3002`;case"read":return`\u7B2C${t.round}\u665A\u6211\u8C03\u51FA\u4E86${n(t.target)}\u7684\u6863\u6848\uFF1A${s(t.role)}\u3002`;case"clue":return r.pick([`\u7B2C${t.round}\u665A\u7AD9\u52A1\u65E5\u5FD7\u7ED9\u4E86\u6211\u4E00\u4EFD\u540D\u5355\uFF1A${fe(t.suspects,n,"\u3001","\u548C")}\u3002\u5176\u4E2D\u81F3\u5C11\u6709\u4E00\u4E2A\u6697\u6D41\u3002`,`\u6211\u7B2C${t.round}\u665A\u7684\u65E5\u5FD7\u7EBF\u7D22\u8BF4\uFF0C${fe(t.suspects,n,"\u3001","\u548C")}\u91CC\u6709\u6697\u6D41\u3002`]);case"accuse":{let a=n(t.target),i={blunt:[`${a}\u662F\u6697\u6D41\u3002\u6211\u62FF\u6211\u7684\u6C27\u6C14\u6253\u8D4C\u3002`,`${a}\u8BF4\u4E0D\u901A\u3002`],warm:[`\u5BF9\u4E0D\u8D77\uFF0C${a}\uFF0C\u4F46\u4F60\u8BA9\u6211\u62C5\u5FC3\u3002`,`${a}\u6709\u70B9\u4E0D\u5BF9\u52B2\uFF0C\u6211\u8BF4\u4E0D\u4E0A\u6765\u3002`],analytical:[`\u6309\u8BC1\u636E\u770B\uFF0C${a}\u662F\u6211\u7684\u5934\u53F7\u5ACC\u7591\u4EBA\u3002`,`\u6570\u5B57\u4E00\u76F4\u6307\u5411${a}\u3002`],nervous:[`\u6211\u89C9\u5F97\u53EF\u80FD\u662F${a}\uFF1F\u5927\u6982\uFF1F`,`${a}\u8BA9\u6211\u6709\u70B9\u5BB3\u6015\u3002`],dry:[`\u6211\u62BC${a}\u3002\u4E0D\u9488\u5BF9\u8C01\u3002`,`${a}\uFF0C\u4F60\u6F14\u6697\u6D41\u6F14\u5F97\u633A\u50CF\u3002`]};return r.pick(i[e])}case"vouch":return r.pick([`\u6211\u4FE1\u4EFB${n(t.target)}\u3002`,`${n(t.target)}\u6211\u89C9\u5F97\u6CA1\u95EE\u9898\u3002`,`\u522B\u52A8${n(t.target)}\uFF0C\u662F\u81EA\u5DF1\u4EBA\u3002`]);case"intend_vote":return t.target==="skip"?r.pick(["\u8FD9\u6B21\u6211\u5148\u4E0D\u6295\u3002","\u9664\u975E\u6709\u65B0\u60C5\u51B5\uFF0C\u6211\u5F03\u7968\u3002"]):r.pick([`\u6211\u6295${n(t.target)}\u3002`,`\u6211\u7684\u7968\u7ED9${n(t.target)}\u3002`,`${n(t.target)}\u62FF\u6211\u8FD9\u4E00\u7968\u3002`])}}},qt={en:Ut,zh:Dt};function st(t,e,n,r,s,a,i="en"){let l=qt[i],o=[],h=a?.lost.length?r.pick(l.loss[e.voice])(n(a.lost[0])):a?.calm?r.pick(l.calm[e.voice]):r.pick(l.openers[e.voice]);h&&o.push(h),s==="last"&&o.push(r.pick(l.last)),s==="defend"&&o.push(r.pick(l.defend));for(let d of t){let m=l.sentence(d,e.voice,n,r);m&&o.push(m)}return t.length===0&&s!=="defend"&&o.push(r.pick(l.quiet[e.voice])),o.join(l.join)}function fe(t,e,n,r){let s=t.map(e);return s.length<=1?s.join(""):`${s.slice(0,-1).join(n)}${r}${s[s.length-1]}`}var Ft={skipRatio:1.15,coordination:.35,accuseRatio:1.3,bussAt:.8,deception:.7,fakeClue:.15},U=class{constructor(e){p(this,"kind","heuristic");p(this,"id");p(this,"memory");p(this,"persona");p(this,"policy");p(this,"rng");p(this,"lastBeliefs",new Map);p(this,"lastThought","");p(this,"cover",{role:null,fakeScans:[],revealed:!1});p(this,"coverDecided",!1);p(this,"lang");this.id=e.id,this.persona=e.persona,this.policy={...Ft,...e.policy},this.memory=new ge(e.id),this.rng=new M(e.seed??rt(e.id+e.persona.name)),this.lang=e.lang??(()=>"en")}say(e,n){return this.lang()==="zh"?n:e}insight(){return{beliefs:Object.fromEntries(this.lastBeliefs),thought:this.lastThought}}async decide(e){return this.decideSync(e)}decideSync(e){let n=this.context(e),r=E(e.role)==="undertow";switch(e.request.kind){case"night":return{kind:"night",target:r?this.undertowNight(n):this.crewNight(n)};case"speak":{let s=r?this.undertowClaims(n,!1):this.crewClaims(n,!1);return{kind:"speak",speech:{text:this.render(s,n),claims:s}}}case"vote":return{kind:"vote",target:r?this.undertowVote(n):this.crewVote(n)};case"last_words":{let s=r?this.undertowClaims(n,!0):this.crewClaims(n,!0);return{kind:"last_words",speech:{text:this.render(s,n,"last"),claims:s}}}}}context(e){this.memory.ingest(e.events);let n=e.players.map(d=>d.id),r=new Set(e.players.filter(d=>d.alive).map(d=>d.id)),s={players:n,alive:r,setup:e.setup,memory:this.memory,params:this.policy.beliefs},a=Ee({...s,perspective:"private"}),i=Ee({...s,perspective:"public"}),l=[...r],o=l.filter(d=>d!==this.id),h=o.reduce((d,m)=>d+a.p.get(m),0)/Math.max(1,o.length);return this.lastBeliefs=a.p,{obs:e,alive:l,others:o,priv:a,pub:i,avg:h}}render(e,n,r){let s=this.memory,a=n.obs.round,i=s.accusationsAgainst(this.id,a).length>=2,o=r!=="last"&&!s.speeches.some(h=>h.round===a&&h.speaker===this.id)?{lost:s.deaths.filter(h=>h.round===a&&h.fate==="dragged").map(h=>h.player),calm:a>1&&s.quietNights.includes(a)}:void 0;return st(e,this.persona,h=>s.name(h),this.rng,r??(i?"defend":void 0),o,this.lang())}top(e,n){let r=null,s=-1/0;for(let a of e){let i=n(a)+this.rng.next()*1e-6;i>s&&(s=i,r=a)}return r}intentionShare(e,n,r){let s=this.memory.intentions(e.obs.round),a=0;for(let[i,l]of s)i!==this.id&&l===n&&(a+=1-r.p.get(i));return a/Math.max(1,e.alive.length-1)}pressured(e){let n=this.memory.accusationsAgainst(this.id,e.obs.round).length,r=this.top(e.alive,s=>e.pub.p.get(s));return n>=2||r===this.id&&e.pub.p.get(this.id)>.5}isFinalDiscussionRound(e){return this.memory.speeches.filter(r=>r.round===e.obs.round&&r.speaker===this.id&&!r.lastWords).length+1>=e.obs.config.discussionRounds}othersClaiming(e){let n=[];for(let[r,s]of this.memory.claimedRoles())s===e&&r!==this.id&&!this.memory.isDead(r)&&n.push(r);return n}crewNight(e){let n=e.obs.request,r=(n.options??[]).filter(a=>a!=="skip");if(r.length===0)return null;let s=a=>e.priv.p.get(a);switch(n.nightAction){case"scan":{let a=new Set(this.memory.scans.map(h=>h.target)),i=r.filter(h=>!a.has(h)),l=i.length?i:r,o=this.memory.claimedRoles();return this.top(l,h=>.6*s(h)+.4*(1-Math.abs(2*s(h)-1))+(o.has(h)?.15:0)+.1*this.rng.next())}case"protect":{let a=this.memory.claimedRoles();return this.top(r,i=>{let l=1-s(i),o=a.get(i),h=o==="sonar"||o==="archivist"?.9:o==="medic"?.2:0,d=Math.min(3,this.memory.claimsBy(i).filter(k=>k.claim.type==="accuse").length)*.1,m=i===this.id?.25:0;return l*(1+h)+d+m+.15*this.rng.next()})}case"read":{let a=this.memory.deaths.filter(l=>l.fate==="airlocked").map(l=>l.player),i=r.filter(l=>a.includes(l));return(i.length?i:r)[i.length?i.length-1:0]}default:return null}}crewClaims(e,n){let r=this.memory,s=e.obs.role,a=[],i=new Set(e.alive),l=this.pressured(e),o=e.obs.round,h=this.persona,d=(v,y)=>{if(y){r.saidBefore(f=>f.type==="role"&&f.role===s)||a.push({type:"role",role:s});for(let f of v)r.saidBefore(P=>JSON.stringify(P)===JSON.stringify(f))||a.push(f)}};switch(s){case"sonar":{let v=r.scans.map(S=>({type:"scan",round:S.round,target:S.target,result:S.result})),y=r.scans.some(S=>S.result==="undertow"&&i.has(S.target)),f=this.othersClaiming("sonar").length>0,P=r.saidBefore(S=>S.type==="role"),g=n||P||y||f||l||o>=3||o>=2&&this.rng.next()<h.openness;d(v,g&&v.length>0);break}case"archivist":{let v=r.reads.map(g=>({type:"read",round:g.round,target:g.target,role:g.role})),y=r.reads.some(g=>E(g.role)==="undertow"||r.deaths.find(S=>S.player===g.target)?.fate==="airlocked"),f=this.othersClaiming("archivist").length>0,P=r.saidBefore(g=>g.type==="role");d(v,(n||P||y||f||l)&&v.length>0);break}case"medic":{let v=r.protects.filter(g=>g.saved),y=this.othersClaiming("medic").length>0,f=v.map(g=>({type:"protect",round:g.round,target:g.target}));if(n||y||v.some(g=>g.round===o)||l&&this.memory.accusationsAgainst(this.id,o).length>=3){r.saidBefore(g=>g.type==="role")||a.push({type:"role",role:"medic"});for(let g of f)r.saidBefore(S=>JSON.stringify(S)===JSON.stringify(g))||a.push(g)}break}case"diver":{for(let v of r.clues){let y={type:"clue",round:v.round,suspects:v.suspects};r.saidBefore(f=>f.type==="clue"&&f.round===v.round)||a.push(y)}n&&!r.saidBefore(v=>v.type==="role")&&a.unshift({type:"role",role:"diver"});break}}let m=v=>e.priv.p.get(v),k=this.top(e.others,m);if(k&&m(k)>=Math.max(.25,this.policy.accuseRatio*e.avg)&&(!n&&r.claims.some(y=>y.round===o&&y.speaker===this.id&&y.claim.type==="accuse"&&y.claim.target===k)||a.push({type:"accuse",target:k}),this.persona.aggression>.65)){let y=this.top(e.others.filter(f=>f!==k),m);y&&m(y)>.6&&a.push({type:"accuse",target:y})}for(let v of e.others)m(v)<.02&&r.accusationsAgainst(v,o).length>0&&!r.saidBefore(y=>y.type==="vouch"&&y.target===v)&&a.push({type:"vouch",target:v});return!n&&this.isFinalDiscussionRound(e)&&a.push({type:"intend_vote",target:this.crewVote(e)}),a}crewVote(e){let n=i=>e.priv.p.get(i),r=i=>n(i)+this.policy.coordination*this.intentionShare(e,i,e.priv),s=this.top(e.others,r);return s?n(s)<this.policy.skipRatio*e.avg&&this.intentionShare(e,s,e.priv)<.3&&e.obs.hull>=3?(this.lastThought=this.say(`No clear suspect (top ${n(s).toFixed(2)} vs avg ${e.avg.toFixed(2)}), skipping.`,`\u6CA1\u6709\u660E\u786E\u7684\u5ACC\u7591\u4EBA\uFF08\u6700\u9AD8 ${n(s).toFixed(2)}\uFF0C\u5E73\u5747 ${e.avg.toFixed(2)}\uFF09\uFF0C\u5F03\u7968\u3002`),"skip"):(this.lastThought=this.say(`Voting ${this.memory.name(s)} (P=${n(s).toFixed(2)}).`,`\u6295 ${this.memory.name(s)}\uFF08P=${n(s).toFixed(2)}\uFF09\u3002`),s):"skip"}team(e){return[this.id,...e.obs.partners]}decideCover(e){if(this.coverDecided)return;this.coverDecided=!0;let n=e.obs.setup,r=this.persona.boldness*this.policy.deception,s=[...this.team(e)].sort()[0]===this.id;n.sonar>0&&s&&this.rng.next()<r&&(this.cover.role="sonar")}threat(e,n){let r=new Set(this.team(e)),s=this.memory.claimedRoles().get(n),a=0;(s==="sonar"||s==="archivist")&&(a+=1.5*(1-e.pub.p.get(n))),s==="medic"&&(a+=.4);let i=this.memory.claimsBy(n).filter(l=>(l.claim.type==="accuse"||l.claim.type==="intend_vote")&&r.has(l.claim.target)||l.claim.type==="scan"&&l.claim.result==="undertow"&&r.has(l.claim.target)).length;return a+=Math.min(3,i)*.35,a+=.6*(1-e.pub.p.get(n)),a}undertowNight(e){let n=(e.obs.request.options??[]).filter(a=>a!=="skip");if(n.length===0)return null;let r=this.memory.proposals.find(a=>a.round===e.obs.round&&a.player!==this.id&&a.target);if(r?.target&&n.includes(r.target)&&this.rng.next()<.85)return r.target;let s=this.top(n,a=>this.threat(e,a)+.4*this.rng.next());return this.lastThought=this.say(`Dragging ${this.memory.name(s)} (threat ${this.threat(e,s).toFixed(2)}).`,`\u62D6\u8D70 ${this.memory.name(s)}\uFF08\u5A01\u80C1 ${this.threat(e,s).toFixed(2)}\uFF09\u3002`),s}frameBar(e){let n=e.others.reduce((r,s)=>r+e.pub.p.get(s),0)/Math.max(1,e.others.length);return Math.max(.25,this.policy.accuseRatio*n)}frameTarget(e,n=[]){let r=new Set(this.team(e)),s=e.others.filter(a=>!r.has(a)&&!n.includes(a));return this.top(s,a=>e.pub.p.get(a)+.25*this.threat(e,a)+this.policy.coordination*this.intentionShare(e,a,e.pub))}undertowClaims(e,n){this.decideCover(e);let r=this.memory,s=[],a=e.obs.round,i=new Set(this.team(e)),l=e.obs.partners.filter(y=>e.alive.includes(y)),o=y=>r.claims.filter(f=>f.round===a&&!f.lastWords&&(f.claim.type==="accuse"||f.claim.type==="intend_vote")&&f.claim.target===y).map(f=>f.speaker),h=e.others.filter(y=>{let f=o(y).filter(P=>P!==this.id);return f.length>0&&f.every(P=>i.has(P))}),d=this.frameTarget(e,h)??this.frameTarget(e),m=this.othersClaiming("sonar").some(y=>r.claimsBy(y).some(f=>f.claim.type==="scan"&&f.claim.result==="undertow"&&i.has(f.claim.target))),k=this.pressured(e);if(this.cover.role==="sonar"&&(this.cover.revealed||m||k||n||a>=2&&this.rng.next()<.4)){for(let y=1;y<=a;y++){if(this.cover.fakeScans.some(S=>S.round===y))continue;let f=this.othersClaiming("sonar")[0],P=new Set(this.cover.fakeScans.map(S=>S.target)),g;if(f&&!P.has(f)&&!i.has(f))g={round:y,target:f,result:"undertow"};else if(l.length&&this.rng.next()<.35&&!P.has(l[0]))g={round:y,target:l[0],result:"crew"};else{let S=this.frameTarget(e,[...P])??d;if(!S)continue;g={round:y,target:S,result:this.rng.next()<.6?"undertow":"crew"}}this.cover.fakeScans.push(g)}r.saidBefore(y=>y.type==="role")||s.push({type:"role",role:"sonar"});for(let y of this.cover.fakeScans)r.saidBefore(f=>f.type==="scan"&&f.round===y.round)||s.push({type:"scan",...y});this.cover.revealed=!0}else if(!this.cover.role&&a>=1&&!r.claims.some(y=>y.claim.type==="clue"&&y.claim.round===a)&&this.rng.next()<this.policy.fakeClue&&d){let y=e.others.filter(g=>g!==d&&!i.has(g)),f=this.rng.shuffle(y).slice(0,1),P=l.length&&this.rng.next()<.3?[l[0]]:this.rng.shuffle(y.filter(g=>!f.includes(g))).slice(0,1);s.push({type:"clue",round:a,suspects:this.rng.shuffle([d,...f,...P])})}n&&!r.saidBefore(y=>y.type==="role")&&!this.cover.role&&s.unshift({type:"role",role:"diver"});let v=l.find(y=>e.pub.p.get(y)>this.policy.bussAt);return v&&!n?s.push({type:"accuse",target:v}):d&&e.pub.p.get(d)>=this.frameBar(e)&&(r.claims.some(y=>y.round===a&&y.speaker===this.id&&y.claim.type==="accuse"&&y.claim.target===d)||s.push({type:"accuse",target:d})),!n&&this.isFinalDiscussionRound(e)&&s.push({type:"intend_vote",target:this.undertowVote(e)}),s}undertowVote(e){let n=e.obs.partners.filter(a=>e.alive.includes(a)),r=this.top(e.others,a=>this.intentionShare(e,a,e.pub)+.5*e.pub.p.get(a));if(r&&n.includes(r)){if(this.intentionShare(e,r,e.pub)>.45||e.pub.p.get(r)>this.policy.bussAt)return this.lastThought=this.say(`Partner ${this.memory.name(r)} is lost; voting with the crowd for cover.`,`\u540C\u4F34 ${this.memory.name(r)} \u4FDD\u4E0D\u4F4F\u4E86\uFF0C\u8DDF\u7740\u5927\u5BB6\u6295\u7968\u505A\u63A9\u62A4\u3002`),r;let i=this.frameTarget(e);return this.lastThought=this.say(`Splitting the vote away from partner onto ${i?this.memory.name(i):"skip"}.`,`\u628A\u7968\u4ECE\u540C\u4F34\u8EAB\u4E0A\u5F15\u5F00\uFF0C\u6295\u7ED9${i?` ${this.memory.name(i)}`:"\u5F03\u7968"}\u3002`),i??"skip"}let s=this.frameTarget(e);return this.lastThought=this.say(`Framing ${s?this.memory.name(s):"nobody"}.`,`\u5AC1\u7978\u7ED9${s?` ${this.memory.name(s)}`:"\u6CA1\u4EBA"}\u3002`),s??"skip"}};function Gt(t,e,n){if(!t||typeof t!="object")return!1;let r=t,s=i=>typeof i=="string"&&e.includes(i)&&i!==n,a=i=>typeof i=="number"&&Number.isInteger(i)&&i>=1&&i<=50;switch(r.type){case"role":return typeof r.role=="string"&&Le.includes(r.role);case"scan":return a(r.round)&&s(r.target)&&(r.result==="crew"||r.result==="undertow");case"protect":return a(r.round)&&typeof r.target=="string"&&e.includes(r.target);case"read":return a(r.round)&&s(r.target)&&typeof r.role=="string"&&Le.includes(r.role);case"clue":return a(r.round)&&Array.isArray(r.suspects)&&r.suspects.length>=1&&r.suspects.length<=5&&r.suspects.every(s)&&new Set(r.suspects).size===r.suspects.length;case"accuse":case"vouch":return s(r.target);case"intend_vote":return r.target==="skip"||s(r.target);default:return!1}}function ve(t,e,n){let r=[],s=new Set;for(let a of t){if(!Gt(a,e,n))continue;let i=Vt(a),l=JSON.stringify(i);s.has(l)||(s.add(l),r.push(i))}return r}function Vt(t){switch(t.type){case"role":return{type:"role",role:t.role};case"scan":return{type:"scan",round:t.round,target:t.target,result:t.result};case"protect":return{type:"protect",round:t.round,target:t.target};case"read":return{type:"read",round:t.round,target:t.target,role:t.role};case"clue":return{type:"clue",round:t.round,suspects:[...t.suspects]};case"accuse":case"vouch":return{type:t.type,target:t.target};case"intend_vote":return{type:"intend_vote",target:t.target}}}function Bt(t){let e=t.replace(/```(?:json)?/gi,"");for(let n=e.indexOf("{");n!==-1;n=e.indexOf("{",n+1)){let r=0,s=!1,a=!1;for(let i=n;i<e.length;i++){let l=e[i];if(s){a?a=!1:l==="\\"?a=!0:l==='"'&&(s=!1);continue}if(l==='"')s=!0;else if(l==="{")r++;else if(l==="}"&&(r--,r===0))try{return JSON.parse(e.slice(n,i+1))}catch{break}}}throw new Error("no JSON object found in reply")}function at(t){let e=Bt(t);if(!e||typeof e!="object"||Array.isArray(e))throw new Error("reply must be a JSON object");let n=e,r=typeof n.tool=="string"?n.tool:typeof n.action=="string"?n.action:"";if(!r)throw new Error('missing "tool"');let s=n.args&&typeof n.args=="object"&&!Array.isArray(n.args)?n.args:{};return{thought:typeof n.thought=="string"?n.thought:"",tool:r,args:s}}var Wt=`UNDERTOW: a social deduction game on Meridian-9, a research station on the sea floor.
+
+Some of the crew are no longer themselves: they are the Undertow. Everyone else is crew.
+- Crew win when every Undertow has been airlocked.
+- Undertow win when living Undertow equal or outnumber living crew, or when the hull gives out.
+
+Each round has a night and a day.
+NIGHT: the Undertow secretly choose one crew member to drag under (not on the first night). Crew with night roles act:
+  - Sonar Tech: pings one player and hears their echo, crew or undertow. A Siren echoes as crew.
+  - Medic: seals one player in the med bay; if the Undertow come for them, they survive. Never the same player two nights in a row.
+  - Archivist: reads the file of one lost player and learns their true role. Nobody else ever learns who the lost really were.
+  - Divers (plain crew) may receive a station-log clue: a short list of names containing at least one Undertow.
+DAY: everyone alive speaks in turn (a few rounds), then all vote at once to airlock one player, or skip.
+  - A player is airlocked only with strictly the most votes and more votes than "skip".
+  - A day without an airlocking costs one point of hull. Hull at 0 floods the station: Undertow win.
+  - The airlocked player gives last words. Their role is not revealed.
+
+Talk is free: anyone may claim anything, true or false. Claims are attached to speeches in structured form
+so everyone can track them. Undertow lie; crew usually tell the truth but may hide their role to stay alive.`;function Kt(t,e){let n=A[t],r=`Your secret role: ${n.name}. ${n.blurb}`;return n.faction==="undertow"?(r+=`
+Your fellow Undertow: ${e.length?e.join(", "):"none, you are alone"}.`,r+=`
+Strategy: blend in, steer suspicion onto crew, protect your partners without looking like it, and consider faking a role or a clue when it helps. Never reveal you are Undertow.`):r+=`
+Strategy: find the Undertow. Share real information when it helps the crew more than it endangers you, look for contradictions between claims, and watch how people vote.`,r}var zt={en:"",zh:`
+LANGUAGE
+The table is speaking Simplified Chinese. Write every "text" (speeches and last words), every "note", every "thought" and every "reason" in natural Simplified Chinese, as a native speaker would say it at the table. The Undertow call themselves \u6697\u6D41 and the crew \u8239\u5458; roles are \u6F5C\u6C34\u5458 (diver), \u58F0\u5450\u5458 (sonar), \u533B\u751F (medic), \u6863\u6848\u5458 (archivist), \u6EBA\u4EA1\u8005 (drowned) and \u585E\u58EC (siren). Keep player names exactly as written. JSON keys, tool names, player ids and claim fields stay in English.
+`};function ot(t,e,n,r,s="en"){return`${Wt}
+${zt[s]}
+You are playing as ${e}, the station's ${t.job}. ${t.description}
+Speak in character: natural, short table talk (1 to 4 sentences), no stage directions, no markdown.
+
+${Kt(n,r)}
+
+HOW YOU ACT
+Every reply you write must be exactly one JSON object and nothing else:
+{"thought": "<your private reasoning, a few sentences>", "tool": "<tool name>", "args": { ... }}
+
+Information tools (optional, use at most a couple per decision):
+- "review_claims"  args {"player": "<id or name, optional>"}  -> every claim made so far, optionally by one player
+- "review_votes"   args {}                                   -> how everyone voted each day
+- "estimate"       args {}                                   -> a quick probability estimate of who is Undertow, from your own knowledge. Treat it as a calculator, not gospel.
+- "note"           args {"text": "..."}                      -> save a private note you will see in later turns
+
+Final tools (exactly one ends the decision; use the one the task asks for):
+- "speak"        args {"text": "...", "claims": [Claim, ...]}
+- "last_words"   args {"text": "...", "claims": [Claim, ...]}
+- "vote"         args {"target": "<player id>" | "skip", "reason": "..."}
+- "night_action" args {"target": "<player id>" | null, "note": "<optional message to fellow Undertow>"}
+
+Claims make your statements machine-readable. Attach a claim for every concrete assertion in your text:
+  {"type":"role","role":"sonar|medic|archivist|diver|drowned|siren"}
+  {"type":"scan","round":N,"target":"<id>","result":"crew|undertow"}
+  {"type":"protect","round":N,"target":"<id>"}
+  {"type":"read","round":N,"target":"<id>","role":"<role>"}
+  {"type":"clue","round":N,"suspects":["<id>","<id>","<id>"]}
+  {"type":"accuse","target":"<id>"}   {"type":"vouch","target":"<id>"}
+  {"type":"intend_vote","target":"<id>|skip"}
+Use player ids (like "p3") in claims and targets. Claims may be lies if that is your strategy.`}function Jt(t,e){switch(t.type){case"role":return`claims ${A[t.role].name}`;case"scan":return`scan n${t.round}: ${e(t.target)} = ${t.result}`;case"protect":return`protected ${e(t.target)} n${t.round}`;case"read":return`read n${t.round}: ${e(t.target)} = ${A[t.role].name}`;case"clue":return`clue n${t.round}: one of ${t.suspects.map(e).join(", ")}`;case"accuse":return`accuses ${e(t.target)}`;case"vouch":return`vouches for ${e(t.target)}`;case"intend_vote":return`will vote ${t.target==="skip"?"skip":e(t.target)}`}}function it(t,e){let n=s=>`${t.name(s)} (${s})`,r=t.claims.filter(s=>!e||s.speaker===e).map(s=>`day ${s.round}${s.lastWords?" (last words)":""} - ${n(s.speaker)}: ${Jt(s.claim,n)}`);return r.length?r.join(`
+`):"No claims yet."}function lt(t){return t.votes.length?t.votes.map(e=>{let n=Object.entries(e.votes).map(([r,s])=>`${t.name(r)} -> ${s==="skip"?"skip":t.name(s)}`);return`Day ${e.round}: ${n.join("; ")}. ${e.airlocked?`${t.name(e.airlocked)} was airlocked.`:"Nobody was airlocked."}`}).join(`
+`):"No votes yet."}function ct(t,e,n){let r=o=>`${e.name(o)} (${o})`,s=[];s.push(`ROUND ${t.round}, phase: ${t.phase.replace("_"," ")}. Hull: ${t.hull}/${t.config.hull}.`);let a=Object.entries(t.setup).filter(([,o])=>o>0).map(([o,h])=>`${h} ${A[o].name}`).join(", ");s.push(`Roles in this game: ${a}.`),s.push(`You are ${r(t.me)}.`),s.push(`Alive: ${t.players.filter(o=>o.alive).map(o=>r(o.id)).join(", ")}.`);let i=t.players.filter(o=>!o.alive);i.length&&s.push(`Lost: ${i.map(o=>`${r(o.id)} (${o.fate==="dragged"?"dragged under at night, so crew":"airlocked, role unknown"})`).join(", ")}.`);let l=[];for(let o of e.scans)l.push(`Night ${o.round} you pinged ${r(o.target)}: ${o.result}.`);for(let o of e.protects)l.push(`Night ${o.round} you sealed ${r(o.target)}${o.saved?" and it SAVED them from the Undertow":""}.`);for(let o of e.reads)l.push(`Night ${o.round} you read ${r(o.target)}'s file: ${A[o.role].name}.`);for(let o of e.clues)l.push(`Night ${o.round} station log clue: at least one of ${o.suspects.map(r).join(", ")} is Undertow.`);for(let o of e.proposals)l.push(`Night ${o.round} ${r(o.player)} proposed dragging ${o.target?r(o.target):"nobody"}${o.note?` ("${o.note}")`:""}.`);l.length&&s.push(`
+YOUR SECRET KNOWLEDGE
+${l.join(`
+`)}`),s.push(`
+WHAT HAPPENED`);for(let o=1;o<=t.round;o++){let d=e.deaths.filter(k=>k.round===o).find(k=>k.fate==="dragged");(o>1||d)&&s.push(`Night ${o}: ${d?`${r(d.player)} was dragged under.`:e.quietNights.includes(o)?"nobody was taken.":"quiet."}`);for(let k of e.speeches.filter(v=>v.round===o))s.push(`  ${k.lastWords?"LAST WORDS ":""}${e.name(k.speaker)}: "${k.text}"`);let m=e.votes.find(k=>k.round===o);if(m){let k=Object.entries(m.votes).map(([v,y])=>`${e.name(v)}->${y==="skip"?"skip":e.name(y)}`);s.push(`  Vote: ${k.join(", ")}. ${m.airlocked?`${e.name(m.airlocked)} airlocked.`:"No airlock; hull damaged."}`)}}return n.length&&s.push(`
+YOUR NOTES
+${n.slice(-12).map(o=>`- ${o}`).join(`
+`)}`),s.join(`
+`)}function dt(t,e){let n=t.request,r=a=>a==="skip"?"skip":`${e.name(a)} (${a})`,s=(n.options??[]).map(r).join(", ");switch(n.kind){case"night":switch(n.nightAction){case"drag":return`NIGHT ${t.round}: choose whom the Undertow drag under. Options: ${s}. Finish with "night_action". You may add a short note to your partners.`;case"scan":return`NIGHT ${t.round}: choose whom to ping with sonar. Options: ${s}. Finish with "night_action" (target null to skip).`;case"protect":return`NIGHT ${t.round}: choose whom to seal in the med bay. Options: ${s}. Finish with "night_action".`;case"read":return`NIGHT ${t.round}: choose whose file to read. Options: ${s}. Finish with "night_action".`;default:return`NIGHT ${t.round}: options ${s}. Finish with "night_action".`}case"speak":{let a=e.speeches.filter(l=>l.round===t.round&&l.speaker===t.me).length,i=a+1>=t.config.discussionRounds;return`DAY ${t.round}, your turn to speak (turn ${a+1} of ${t.config.discussionRounds}). Finish with "speak".${i?" This is your last turn before the vote: say who you will vote for (intend_vote claim).":""}`}case"vote":return`DAY ${t.round} VOTE: choose one of: ${s}. Finish with "vote".`;case"last_words":return'You have been airlocked. Give your last words (you can still help your team). Finish with "last_words".'}}var we=class extends Error{constructor(n,r){super(n);p(this,"retryable",r)}},be=class{constructor(){p(this,"inputTokens",0);p(this,"outputTokens",0);p(this,"calls",0);p(this,"failures",0)}record(e){this.calls++,this.inputTokens+=e.usage?.inputTokens??0,this.outputTokens+=e.usage?.outputTokens??0}};var Yt={night:"night_action",speak:"speak",vote:"vote",last_words:"last_words"},ne=class{constructor(e){p(this,"opts",e);p(this,"kind");p(this,"id");p(this,"twin");p(this,"notes",[]);p(this,"lastThought","");p(this,"maxSteps");p(this,"retryDelayMs");p(this,"traces",[]);this.id=e.id,this.kind=`llm:${e.provider.name}`,this.twin=new U({id:e.id,persona:e.persona,seed:e.seed,lang:e.lang}),this.maxSteps=e.maxSteps??4,this.retryDelayMs=e.retryDelayMs??750}get memory(){return this.twin.memory}insight(){return{beliefs:this.twin.insight().beliefs,thought:this.lastThought,notes:[...this.notes]}}async decide(e){let n=this.twin.context(e),r=this.twin.memory,s=e.partners.map(d=>r.name(d)),a=this.opts.lang?.()??"en",i=ot(this.opts.persona,r.name(e.me),e.role,s,a),l=[{role:"user",content:`${ct(e,r,this.notes)}
+
+TASK: ${dt(e,r)}`}],o=[],h=Yt[e.request.kind];for(let d=0;d<this.maxSteps;d++){let m=d===this.maxSteps-1,k;try{let f=await this.opts.provider.complete({system:i,messages:l,maxTokens:700,meta:{observation:e,step:d}});this.opts.meter?.record(f),k=f.text}catch(f){if(this.opts.meter&&this.opts.meter.failures++,f instanceof we&&f.retryable&&!m){o.push({thought:"",tool:"",args:{},error:`retrying: ${f.message}`}),await new Promise(P=>setTimeout(P,this.retryDelayMs*2**d));continue}o.push({thought:"",tool:"",args:{},error:String(f instanceof Error?f.message:f)});break}l.push({role:"assistant",content:k});let v;try{v=at(k)}catch(f){let P=`Your reply was not valid: ${f.message}. Reply with exactly one JSON object.`;o.push({thought:"",tool:"",args:{},error:P}),l.push({role:"user",content:P});continue}if(v.thought&&(this.lastThought=v.thought),v.tool===h){let f=this.toAction(v,e);if("error"in f){o.push({...v,error:f.error}),l.push({role:"user",content:`Error: ${f.error} Try again.`});continue}return o.push(v),this.finish(e,o,f.action,!1)}let y=this.runTool(v,e,n.priv.p,h,m);o.push({...v,observation:y}),l.push({role:"user",content:`OBSERVATION: ${y}`})}return this.finish(e,o,this.twin.decideSync(e),!0)}finish(e,n,r,s){let a={player:this.id,round:e.round,kind:e.request.kind,steps:n,action:r,fallback:s};return this.traces.push(a),this.opts.onTrace?.(a),r}runTool(e,n,r,s,a){let i=this.twin.memory;switch(e.tool){case"review_claims":{let l=typeof e.args.player=="string"?this.resolvePlayer(e.args.player,n):null;return it(i,l??void 0)}case"review_votes":return lt(i);case"estimate":return`Estimated chance each living player is Undertow, from what you know: ${n.players.filter(o=>o.alive&&o.id!==n.me).map(o=>({p:o,v:r.get(o.id)??0})).sort((o,h)=>h.v-o.v).map(({p:o,v:h})=>`${o.name} (${o.id}): ${(h*100).toFixed(0)}%`).join(", ")}.`;case"note":{let l=String(e.args.text??"").trim().slice(0,300);return l&&this.notes.push(this.opts.lang?.()==="zh"?`\u7B2C${n.round}\u5929\uFF1A${l}`:`Day ${n.round}: ${l}`),l?"Noted.":"Nothing to note."}default:return`Unknown tool "${e.tool}". For this decision finish with "${s}".`}}resolvePlayer(e,n){if(typeof e!="string")return null;let r=e.trim().toLowerCase(),s=n.players.find(o=>o.id.toLowerCase()===r);if(s)return s.id;let a=n.players.find(o=>o.name.toLowerCase()===r);if(a)return a.id;let i=n.players.filter(o=>o.name.toLowerCase().split(" ")[0]===r.split(" ")[0]);if(i.length===1)return i[0].id;let l=r.match(/\bp\d+\b/);return l?this.resolvePlayer(l[0],n):null}resolveClaims(e,n){let s=(Array.isArray(e)?e:[]).map(a=>{if(!a||typeof a!="object")return a;let i={...a};return typeof i.target=="string"&&i.target!=="skip"&&(i.target=this.resolvePlayer(i.target,n)??i.target),Array.isArray(i.suspects)&&(i.suspects=i.suspects.map(l=>this.resolvePlayer(l,n)??l)),typeof i.round=="string"&&(i.round=Number(i.round)),i});return ve(s,n.players.map(a=>a.id),n.me)}toAction(e,n){let r=n.request,s=e.args;switch(r.kind){case"speak":case"last_words":{let a=typeof s.text=="string"?s.text.trim():"";if(!a)return{error:'"text" must be a non-empty string.'};let i=this.resolveClaims(s.claims,n);return{action:r.kind==="speak"?{kind:"speak",speech:{text:a,claims:i}}:{kind:"last_words",speech:{text:a,claims:i}}}}case"vote":{let a=s.target,i=a==="skip"||a===null?"skip":this.resolvePlayer(a,n);return!i||!r.options.includes(i)?{error:`"target" must be one of: ${r.options.join(", ")}.`}:{action:{kind:"vote",target:i}}}case"night":{if(s.target===null||s.target===void 0||s.target==="none")return r.allowNone?{action:{kind:"night",target:null}}:{error:"You must choose a target tonight."};let a=this.resolvePlayer(s.target,n);if(!a||!r.options.includes(a))return{error:`"target" must be one of: ${r.options.join(", ")}.`};let i=typeof s.note=="string"?s.note:void 0;return{action:{kind:"night",target:a,note:i}}}}}};var ke=class{constructor(e,n,r={}){p(this,"opts",r);p(this,"name","mock");p(this,"brain");p(this,"rng");this.brain=new U({id:e,persona:n,seed:r.seed,lang:r.lang}),this.rng=new M((r.seed??7)^1540483477)}async complete(e){let n=e.meta?.observation;if(!n)return{text:'{"thought":"no context","tool":"note","args":{"text":"?"}}'};let r=e.meta.step,s={inputTokens:Math.round((e.system.length+e.messages.reduce((o,h)=>o+h.content.length,0))/4),outputTokens:60},a=this.opts.noise??0;if(a>0&&r===0&&this.rng.chance(a))return{text:this.rng.chance(.5)?"Hmm, let me think about this...":'{"thought":"oops","tool":"vote","args":{"target":"nobody"}}',usage:s};let i=e.messages[e.messages.length-1]?.content??"";if(n.request.kind==="speak"&&r===0&&!i.startsWith("OBSERVATION")){let o=this.opts.lang?.()==="zh"?"\u5148\u770B\u770B\u6982\u7387\u3002":"Let me check the odds first.";return{text:JSON.stringify({thought:o,tool:"estimate",args:{}}),usage:s}}let l=this.brain.decideSync(n);return{text:JSON.stringify(Zt(l,this.brain.insight().thought??"")),usage:s}}};function Zt(t,e){switch(t.kind){case"speak":return{thought:e,tool:"speak",args:{text:t.speech.text,claims:t.speech.claims}};case"last_words":return{thought:e,tool:"last_words",args:{text:t.speech.text,claims:t.speech.claims}};case"vote":return{thought:e,tool:"vote",args:{target:t.target}};case"night":return{thought:e,tool:"night_action",args:{target:t.target,note:t.note}}}}function ut(t){let e=null;return(n,r,s)=>{let a=t.seed*31+s;switch(t.kind){case"heuristic":return new U({id:n,persona:r,seed:a,policy:t.policy,lang:t.lang});case"mock-llm":return new ne({id:n,persona:r,seed:a,provider:new ke(n,r,{seed:a,lang:t.lang}),meter:t.meter,onTrace:t.onTrace,lang:t.lang});case"anthropic":case"openai":{if(!t.provider)throw new Error(`agent kind ${t.kind} needs a provider`);return e??(e=t.provider()),new ne({id:n,persona:r,seed:a,provider:e,meter:t.meter??new be,onTrace:t.onTrace,lang:t.lang})}}}}var pt={discussionRounds:2,hull:3,clueChance:1,clueSize:3,revealOnAirlock:!1,firstNightDrag:!1,maxRounds:12};var _=class extends Error{},$e=class t{constructor(e){p(this,"state");p(this,"rng");this.state=e,this.rng=new M(e.rngState)}static create(e){let n={...pt,clueChance:Ke(e.names.length),...e.config},r=e.names.length,s=n.roles??We(r);if(s.length!==r)throw new _(`role list has ${s.length} roles for ${r} players`);let a=new M(e.seed),i=a.shuffle(s),l=e.names.map((m,k)=>({id:`p${k}`,name:m,seat:k,role:i[k],alive:!0})),o={seed:e.seed,rngState:a.state,config:n,players:l,round:0,phase:"night",hull:n.hull,events:[],night:{undertowProposals:{},actions:{}},lastProtect:{},readsDone:{},discussion:{order:[],index:0,round:1},votes:{},pendingLastWords:null},h=new t(o);h.emit("all",{type:"game_start",players:l.map(m=>({id:m.id,name:m.name,seat:m.seat})),setup:pe(s),config:n});let d=l.filter(m=>E(m.role)==="undertow");for(let m of l){let k=E(m.role)==="undertow"?d.filter(v=>v.id!==m.id).map(v=>v.id):[];h.emit([m.id],{type:"role_assigned",player:m.id,role:m.role,partners:k})}return h.startNight(),h}get over(){return this.state.phase==="ended"}player(e){let n=this.state.players.find(r=>r.id===e);if(!n)throw new _(`unknown player ${e}`);return n}living(){return this.state.players.filter(e=>e.alive)}livingUndertow(){return this.living().filter(e=>E(e.role)==="undertow")}livingCrew(){return this.living().filter(e=>E(e.role)==="crew")}pendingRequests(){let e=this.state,n=e.round;switch(e.phase){case"ended":return[];case"night":{let r=[],a=e.round>1||e.config.firstNightDrag?this.livingUndertow().find(i=>!(i.id in e.night.undertowProposals)):void 0;a&&r.push({playerId:a.id,kind:"night",nightAction:"drag",options:this.dragTargets(),allowNone:!1,round:n});for(let i of this.living()){let l=A[i.role].nightAction;!l||l==="drag"||i.id in e.night.actions||r.push({playerId:i.id,kind:"night",nightAction:l,options:this.nightTargets(i),allowNone:!0,round:n})}return r}case"day_discussion":{let r=e.discussion.order[e.discussion.index];return r?[{playerId:r,kind:"speak",round:n}]:[]}case"day_vote":return this.living().filter(r=>!(r.id in e.votes)).map(r=>({playerId:r.id,kind:"vote",options:[...this.living().filter(s=>s.id!==r.id).map(s=>s.id),"skip"],round:n}));case"last_words":return e.pendingLastWords?[{playerId:e.pendingLastWords,kind:"last_words",round:n}]:[]}}dragTargets(){return this.livingCrew().map(e=>e.id)}nightTargets(e){let n=this.state;switch(A[e.role].nightAction){case"scan":return this.living().filter(r=>r.id!==e.id).map(r=>r.id);case"protect":return this.living().filter(r=>r.id!==n.lastProtect[e.id]).map(r=>r.id);case"read":{let r=n.readsDone[e.id]??[];return n.players.filter(s=>!s.alive&&!r.includes(s.id)).map(s=>s.id)}default:return[]}}submit(e,n){let r=this.pendingRequests().find(s=>s.playerId===e);if(!r)throw new _(`no decision pending for ${e} in phase ${this.state.phase}`);if(r.kind!==n.kind)throw new _(`expected ${r.kind} from ${e}, got ${n.kind}`);switch(n.kind){case"night":this.submitNight(r,n.target,n.note);break;case"speak":this.submitSpeech(e,this.cleanSpeech(e,n.speech));break;case"vote":if(!r.options.includes(n.target))throw new _(`invalid vote target ${n.target}`);this.state.votes[e]=n.target,this.pendingRequests().length===0&&this.resolveVote();break;case"last_words":this.emit("all",{type:"last_words",player:e,speech:this.cleanSpeech(e,n.speech)}),this.state.pendingLastWords=null,this.startNight();break}this.state.rngState=this.rng.state}cleanSpeech(e,n){let r=Xt(n);return{text:r.text,claims:ve(r.claims,this.state.players.map(s=>s.id),e)}}submitNight(e,n,r){let s=this.state;if(n===null){if(!e.allowNone)throw new _("a target is required")}else if(!e.options.includes(n))throw new _(`invalid night target ${n}`);if(e.nightAction==="drag"){s.night.undertowProposals[e.playerId]=n;let a=this.livingUndertow().map(i=>i.id);this.emit(a,{type:"undertow_proposal",player:e.playerId,target:n,note:r?.slice(0,280)})}else s.night.actions[e.playerId]=n;this.pendingRequests().length===0&&this.resolveNight()}submitSpeech(e,n){let r=this.state.discussion;this.emit("all",{type:"speech",player:e,speech:n,discussionRound:r.round}),r.index++,r.index>=r.order.length&&(r.round++,r.index=0,r.order=r.order.filter(s=>this.player(s).alive),r.round>this.state.config.discussionRounds&&this.startVote())}setPhase(e){this.state.phase=e,this.emit("all",{type:"phase",phase:e,round:this.state.round})}startNight(){let e=this.state;if(!this.checkWin()){if(e.round++,e.round>e.config.maxRounds){this.endGame("undertow","round_limit");return}e.night={undertowProposals:{},actions:{}},this.setPhase("night");for(let n of this.living())A[n.role].nightAction==="read"&&this.nightTargets(n).length===0&&(e.night.actions[n.id]=null);this.pendingRequests().length===0&&this.resolveNight()}}resolveNight(){var i,l;let e=this.state,n=Object.values(e.night.undertowProposals).filter(o=>o!==null),r=null;if(n.length>0){let o=new Map;for(let d of n)o.set(d,(o.get(d)??0)+1);let h=-1;for(let d of n){let m=o.get(d);m>h&&(h=m,r=d)}}let s=new Set;for(let o of this.living())if(A[o.role].nightAction==="protect"){let h=e.night.actions[o.id];e.lastProtect[o.id]=h??null,h&&s.add(h)}let a=null;r&&!s.has(r)&&(a=this.player(r),a.alive=!1,a.fate="dragged",a.diedRound=e.round);for(let o of this.living()){let h=e.night.actions[o.id];if(h)switch(A[o.role].nightAction){case"scan":this.emit([o.id],{type:"scan_result",player:o.id,target:h,result:Be(this.player(h).role)});break;case"protect":this.emit([o.id],{type:"protect_result",player:o.id,target:h,saved:h===r});break;case"read":((i=e.readsDone)[l=o.id]??(i[l]=[])).push(h),this.emit([o.id],{type:"read_result",player:o.id,target:h,role:this.player(h).role});break}}this.dealClue(),a?this.emit("all",{type:"dragged",player:a.id}):this.emit("all",{type:"quiet_night"}),!this.checkWin()&&this.startDiscussion()}dealClue(){let e=this.state,n=this.living().filter(o=>o.role==="diver"),r=this.livingUndertow();if(n.length===0||r.length===0||!this.rng.chance(e.config.clueChance))return;let s=this.rng.pick(n),a=this.rng.pick(r),i=this.rng.shuffle(this.living().filter(o=>o.id!==s.id&&o.id!==a.id)),l=this.rng.shuffle([a,...i.slice(0,e.config.clueSize-1)]).map(o=>o.id);this.emit([s.id],{type:"clue",player:s.id,suspects:l})}startDiscussion(){let e=this.state,n=this.living().map(s=>s.id),r=(e.round-1)%n.length;e.discussion={order:[...n.slice(r),...n.slice(0,r)],index:0,round:1},e.votes={},this.setPhase("day_discussion"),e.config.discussionRounds<=0&&this.startVote()}startVote(){this.state.votes={},this.setPhase("day_vote")}resolveVote(){let e=this.state,n={};for(let l of Object.values(e.votes))n[l]=(n[l]??0)+1;this.emit("all",{type:"votes",votes:{...e.votes},tally:n});let r=n.skip??0,s=Object.entries(n).filter(([l])=>l!=="skip").sort((l,o)=>o[1]-l[1]),a=s[0],i=a&&(s.length===1||s[1][1]<a[1]);if(a&&i&&a[1]>r){let l=this.player(a[0]);if(l.alive=!1,l.fate="airlocked",l.diedRound=e.round,this.emit("all",{type:"airlocked",player:l.id,...e.config.revealOnAirlock?{faction:E(l.role)}:{}}),this.checkWin())return;e.pendingLastWords=l.id,this.setPhase("last_words");return}this.emit("all",{type:"no_airlock",reason:a&&a[1]>r?"tie":"skip"}),e.hull--,this.emit("all",{type:"hull",hull:e.hull,delta:-1}),this.startNight()}checkWin(){if(this.state.phase==="ended")return!0;let e=this.livingUndertow().length,n=this.livingCrew().length;return e===0?this.endGame("crew","all_undertow_gone"):e>=n?this.endGame("undertow","undertow_parity"):this.state.hull<=0?this.endGame("undertow","hull_breach"):!1}endGame(e,n){let r=this.state;r.winner=e,r.winReason=n,r.phase="ended";let s={};for(let a of r.players)s[a.id]=a.role;return this.emit("all",{type:"game_end",winner:e,reason:n,roles:s}),!0}emit(e,n){let r=this.state;r.events.push({seq:r.events.length,round:r.round,phase:r.phase,visibleTo:e,data:n})}eventsFor(e){return e===null?this.state.events:this.state.events.filter(n=>n.visibleTo==="all"||n.visibleTo.includes(e))}serialize(){return JSON.stringify(this.state)}static deserialize(e){return new t(JSON.parse(e))}},Qt=600;function Xt(t){let e=String(t?.text??"").replace(/\s+/g," ").trim().slice(0,Qt),n=Array.isArray(t?.claims)?t.claims.slice(0,8):[];return{text:e,claims:n}}function ht(t){let r=new M(t.seed^2654435769).shuffle(he).slice(0,t.players).map((l,o)=>t.human&&t.human.seat===o?t.human.name:l.name),s=$e.create({seed:t.seed,names:r,config:t.config}),a=new Map,i=new Map;for(let l of s.state.players){if(t.human&&t.human.seat===l.seat)continue;let o=ze(l.name);i.set(l.id,o);let h=t.makeAgent?t.makeAgent(l.id,o,l.seat):new U({id:l.id,persona:o,seed:t.seed*31+l.seat,policy:t.policy});a.set(l.id,h)}return{game:s,agents:a,personas:i}}function Me(t,e,n){let r=t.state,s=t.player(e),a=r.events.find(o=>o.data.type==="role_assigned"&&o.data.player===e),i=a&&a.data.type==="role_assigned"?a.data.partners:[],l=r.events[0].data;return{me:e,role:s.role,partners:i,round:r.round,phase:r.phase,hull:r.hull,config:r.config,setup:l.type==="game_start"?l.setup:pe(r.players.map(o=>o.role)),players:r.players.map(o=>({id:o.id,name:o.name,seat:o.seat,alive:o.alive,fate:o.fate})),events:t.eventsFor(e),request:n}}function Oe(t){switch(t.kind){case"night":{let e=(t.options??[]).filter(n=>n!=="skip");return{kind:"night",target:t.allowNone||e.length===0?null:e[0]}}case"speak":return{kind:"speak",speech:{text:"...",claims:[]}};case"vote":return{kind:"vote",target:"skip"};case"last_words":return{kind:"last_words",speech:{text:"...",claims:[]}}}}var Pe=class{constructor(e,n,r={}){p(this,"game",e);p(this,"controllers",n);p(this,"hooks",r);p(this,"emitted",0);p(this,"stopped",!1)}stop(){this.stopped=!0}async run(){for(this.flush();!this.game.over&&!this.stopped;){let e=this.game.pendingRequests();if(e.length===0)throw new Error(`engine stalled in phase ${this.game.state.phase}`);let n=await Promise.all(e.map(r=>this.ask(r)));for(let r=0;r<e.length&&!this.stopped;r++)this.apply(e[r],n[r]);this.flush()}return this.game}async ask(e){let n=this.controllers.get(e.playerId);if(!n)return Oe(e);this.hooks.onRequest?.(e);try{return await n.decide(Me(this.game,e.playerId,e))}catch(r){return this.hooks.onError?.(e.playerId,r),Oe(e)}}apply(e,n){try{this.game.submit(e.playerId,n)}catch(r){if(!(r instanceof _))throw r;this.hooks.onError?.(e.playerId,r),this.game.submit(e.playerId,Oe(e))}}flush(){let e=this.game.state.events;if(this.emitted<e.length){let n=e.slice(this.emitted);this.emitted=e.length,this.hooks.onEvents?.(n)}}};var _e=class{constructor(e){p(this,"id",e);p(this,"kind","human");p(this,"pending",null);p(this,"onPending")}decide(e){return new Promise(n=>{this.pending={obs:e,resolve:n},this.onPending?.()})}act(e){if(!this.pending)return!1;let{resolve:n}=this.pending;return this.pending=null,n(e),!0}},en=t=>new Promise(e=>setTimeout(e,t)),Ie=class{constructor(e){p(this,"game");p(this,"human");p(this,"agents");p(this,"personas");p(this,"listeners",new Set);p(this,"thinking",new Set);p(this,"traces",[]);p(this,"match");p(this,"paceMs");p(this,"omniscient");p(this,"agentKind");p(this,"error",null);this.paceMs=e.paceMs??0,this.omniscient=e.omniscient??!e.human,this.agentKind=e.agentKind??"heuristic";let n=ht({players:e.players,seed:e.seed,human:e.human,makeAgent:e.makeAgent});this.game=n.game,this.personas=n.personas,this.agents=new Map,this.human=e.human?new _e(`p${e.human.seat}`):null,this.human&&(this.human.onPending=()=>this.publish(),this.agents.set(this.human.id,this.human));for(let[r,s]of n.agents)this.agents.set(r,this.paced(s));this.match=new Pe(this.game,this.agents,{onEvents:()=>this.publish()})}paced(e){let n=this;return{id:e.id,kind:e.kind,insight:e.insight?.bind(e),async decide(r){n.thinking.add(e.id),n.publish();let s=Date.now();try{let a=await e.decide(r),l=(r.request.kind==="speak"||r.request.kind==="last_words"?n.paceMs:n.paceMs/3)-(Date.now()-s);return l>0&&await en(l),a}finally{n.thinking.delete(e.id)}}}}recordTrace(e){this.traces.push(e),this.traces.length>400&&this.traces.shift()}async start(){try{await this.match.run()}catch(e){this.error=String(e instanceof Error?e.message:e)}this.publish()}stop(){this.match.stop()}act(e){if(!this.human?.pending)return{ok:!1,error:"not your turn"};let n=this.human.pending.obs.request;if(!e||n.kind!==e.kind)return{ok:!1,error:`expected a ${n.kind} action`};if(e.kind==="night"){if(e.target===null?!n.allowNone:!n.options?.includes(e.target))return{ok:!1,error:"invalid target"}}else if(e.kind==="vote"){if(!n.options?.includes(e.target))return{ok:!1,error:"invalid vote"}}else if(!e.speech||typeof e.speech.text!="string")return{ok:!1,error:"speech needs text"};return this.human.act(e),{ok:!0}}subscribe(e){return this.listeners.add(e),e(this.view()),()=>this.listeners.delete(e)}publish(){if(this.listeners.size===0)return;let e=this.view();for(let n of this.listeners)n(e)}view(){let e=this.game.state,n=this.human?.id??null,r=e.phase==="ended",s=this.omniscient||r,a=n?this.game.player(n):null,i=n?e.events.find(d=>d.data.type==="role_assigned"&&d.data.player===n):void 0,l=e.events[0].data,o={};if(this.omniscient)for(let[d,m]of this.agents)m.insight&&(o[d]=m.insight());let h=null;return this.human?.pending&&(h=this.human.pending.obs.request),{you:n,yourRole:a?.role??null,partners:i?.data.type==="role_assigned"?i.data.partners:[],players:e.players.map(d=>({id:d.id,name:d.name,seat:d.seat,job:this.personas.get(d.id)?.job??"crew member",alive:d.alive,fate:d.fate,human:d.id===n})),round:e.round,phase:e.phase,hull:e.hull,maxHull:e.config.hull,setup:l.type==="game_start"?l.setup:{},events:s?e.events:this.game.eventsFor(n),pending:h,roles:s?Object.fromEntries(e.players.map(d=>[d.id,d.role])):null,insights:this.omniscient?o:null,traces:this.omniscient?this.traces.slice(-60):null,thinking:[...this.thinking],winner:e.winner??null,winReason:e.winReason??null,agentKind:this.agentKind}}observationFor(e){let n=this.game.pendingRequests().find(r=>r.playerId===e);return n?Me(this.game,e,n):null}};var Re=class{constructor(e){p(this,"session");p(this,"lang",Ye());let n=null;this.lang.current=e.lang;let r=ut({kind:e.agent,seed:e.seed,onTrace:s=>n?.recordTrace(s),lang:()=>this.lang.current});n=new Ie({players:e.players,seed:e.seed,human:e.mode==="play"?{seat:e.seed%e.players,name:e.name}:void 0,makeAgent:r,agentKind:e.agent,paceMs:e.paceMs}),this.session=n}subscribe(e){this.session.subscribe(e),this.session.start()}async act(e){return this.session.act(e)}setPace(e){this.session.paceMs=e}setLang(e){this.lang.current=e}stop(){this.session.stop()}},Se=class t{constructor(e,n){p(this,"id",e);p(this,"token",n);p(this,"source",null)}static async create(e){let n=await fetch("/api/games",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(e)}),r=await n.json();if(!n.ok)throw new Error(r.error??"could not create game");return new t(r.id,r.token)}subscribe(e){this.source=new EventSource(`/api/games/${this.id}/stream?token=${encodeURIComponent(this.token)}`),this.source.addEventListener("view",n=>e(JSON.parse(n.data)))}async act(e){return(await fetch(`/api/games/${this.id}/act?token=${encodeURIComponent(this.token)}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:e})})).json()}setPace(e){fetch(`/api/games/${this.id}/pace?token=${encodeURIComponent(this.token)}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({paceMs:e})})}setLang(e){fetch(`/api/games/${this.id}/lang?token=${encodeURIComponent(this.token)}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({lang:e})})}stop(){this.source?.close()}};async function mt(){try{let t=await fetch("/api/health",{cache:"no-store"});if(!t.ok)return null;let e=await t.json();return Array.isArray(e.kinds)?e.kinds:null}catch{return null}}var tn=t=>t.length?t[t.length-1].seq:-1,xe=class{constructor(){p(this,"frames",[]);p(this,"traces",[]);p(this,"traceKeys",new Set);p(this,"last",null)}push(e){for(let s of e.traces??[]){let a=JSON.stringify(s);this.traceKeys.has(a)||(this.traceKeys.add(a),this.traces.push(s))}let n={seq:tn(e.events),round:e.round,phase:e.phase,hull:e.hull,players:e.players,insights:e.insights,traces:this.traces.length,winner:e.winner,winReason:e.winReason},r=this.frames[this.frames.length-1];r&&r.seq===n.seq&&r.phase===n.phase&&r.winner===n.winner&&r.traces===n.traces?this.frames[this.frames.length-1]=n:this.frames.push(n),this.last=e}get ready(){return!!this.last&&this.last.phase==="ended"&&!!this.last.roles}build(e=new Date){let n=this.last;if(!n||!n.roles)throw new Error("the game is not over yet");return{format:"undertow-replay",version:1,savedAt:e.toISOString(),agentKind:n.agentKind,you:n.you,maxHull:n.maxHull,setup:n.setup,roles:n.roles,events:n.events,traces:this.traces,frames:this.frames}}},B=class extends Error{constructor(n,r){super(r);p(this,"code",n)}};function yt(t){let e;try{e=JSON.parse(t)}catch{throw new B("not_json","That is not a replay file (not JSON).")}let n=e;if(!n||n.format!=="undertow-replay")throw new B("not_replay","That is not an Undertow replay.");if(n.version!==1)throw new B("version",`Unsupported replay version ${String(n.version)}.`);if(!Array.isArray(n.events)||!Array.isArray(n.frames)||n.frames.length===0||!n.roles)throw new B("incomplete","The replay is incomplete.");return n}function gt(t,e){let n=Math.max(0,Math.min(t.frames.length-1,e)),r=t.frames[n];return{you:null,yourRole:null,partners:[],players:r.players,round:r.round,phase:r.phase,hull:r.hull,maxHull:t.maxHull,setup:t.setup,events:t.events.filter(s=>s.seq<=r.seq),pending:null,roles:t.roles,insights:r.insights,traces:t.traces.slice(0,r.traces).slice(-60),thinking:[],winner:r.winner,winReason:r.winReason,agentKind:`${t.agentKind} \xB7 replay`}}function nn(t){let e=[],n=null;for(let r of t.frames){if(n)for(let s of t.events)s.seq>n.seq&&s.seq<r.seq&&e.push({...n,seq:s.seq});e.push(r),n=r}return{...t,frames:e}}var re=class{constructor(e,n=700){p(this,"paceMs",n);p(this,"index",0);p(this,"playing",!1);p(this,"listeners",new Set);p(this,"timer",null);p(this,"replay");this.replay=nn(e)}get length(){return this.replay.frames.length}subscribe(e){this.listeners.add(e),e(gt(this.replay,this.index))}async act(){return{ok:!1,error:"This is a replay."}}setPace(e){this.paceMs=e}setLang(){}seek(e){this.index=Math.max(0,Math.min(this.length-1,e)),this.index===this.length-1&&this.pause();let n=gt(this.replay,this.index);for(let r of this.listeners)r(n)}seekPhase(e){let n=this.replay.frames,r=a=>`${n[a].round}:${n[a].phase}`,s=this.index;if(e===1)for(;s<n.length-1&&r(s)===r(this.index);)s++;else{for(;s>0&&r(s-1)===r(this.index);)s--;if(s===this.index&&s>0){s--;let a=r(s);for(;s>0&&r(s-1)===a;)s--}}this.seek(s)}play(){this.index>=this.length-1&&(this.index=0),this.playing=!0,this.tick()}pause(){this.playing=!1,this.timer&&clearTimeout(this.timer),this.timer=null}tick(){this.playing&&(this.timer=setTimeout(()=>{this.seek(this.index+1),this.tick()},Math.max(60,this.paceMs)))}stop(){this.pause(),this.listeners.clear()}};var rn={docTitle:"Undertow \xB7 Meridian-9",brandSub:"Meridian-9 \xB7 depth 4,000 m",langLabel:"Language",setupKicker:"Station log \xB7 entry 0",setupTitle:"Something came up from the trench.",setupLede:"You are one of a handful of crew on a research station at the bottom of the sea. Some of the others are not themselves any more. Talk, bluff, deduce and vote, alongside AI crewmates who keep private memories, track beliefs about everyone and lie when it suits them.",factsCrew:"Crew",factsCrewValue:"5 to 10 aboard",factsAi:"AI seats",factsAiValue:"memory, beliefs, bluffing",factsPlay:"A game",factsPlayValue:"about 10 minutes",formTitle:"Dive plan",yourName:"Your name",defaultName:"You",crewSize:"Crew size",modeLabel:"Seat",modePlay:"Play a seat",modeWatch:"Watch an all-AI game and see inside their minds",aiCrew:"AI crew",seed:"Seed",pace:"Pace",paceUnit:"ms per AI line",descend:"Descend",replayTitle:"Watch a replay",replayFile:"Replay file",replayPaste:"Or paste one",replayPastePh:"Paste a copied replay here",replayWatch:"Watch",serverConnected:"Connected to the Undertow server.",serverLlm:" Model-backed agents are available.",serverNoLlm:" Set an API key and model on the server for model-backed agents.",browserOnly:"Running fully in your browser. Start the Node server for Claude or OpenAI-compatible agents.",couldNotStart:t=>`Could not start: ${t}`,kind:{heuristic:"Rule-based agents (offline)","mock-llm":"Mock LLM agents (offline, full ReAct pipeline)",anthropic:"Claude agents (server)",openai:"OpenAI-compatible agents (server)"},replayErr:{not_json:"That is not a replay file (not JSON).",not_replay:"That is not an Undertow replay.",version:"This replay was saved by a newer version.",incomplete:"The replay is incomplete."},gameOver:"Game over",night:t=>`Night ${t}`,day:t=>`Day ${t}`,discussion:"discussion",vote:"vote",lastWords:"last words",hull:"Hull",hullTitle:"hull integrity",usage:(t,e,n)=>`${t} model calls \xB7 ${e}k in / ${n}k out`,kindShort:{heuristic:"rule-based","mock-llm":"mock LLM",anthropic:"Claude",openai:"OpenAI-compatible"},roster:"Crew manifest",you:"you",partner:"partner",thatsYou:"that's you",claims:t=>`claims ${t}`,draggedUnder:"dragged under",airlocked:"airlocked",voteIntents:t=>t===1?"1 vote intent":`${t} vote intents`,suspicion:t=>`crew agents' average suspicion: ${t}%`,chip:{role:t=>`role: ${t}`,scan:(t,e,n)=>`ping N${t}: ${e} = ${n}`,protect:(t,e)=>`sealed ${e} N${t}`,read:(t,e,n)=>`file N${t}: ${e} = ${n}`,clue:(t,e)=>`clue N${t}: ${e}`,accuse:t=>`accuses ${t}`,vouch:t=>`vouches ${t}`,vote:t=>`votes ${t}`},skip:"skip",remove:"remove",crewWord:"crew",undertowWord:"Undertow",private:"private",intro:(t,e)=>`Meridian-9, 4,000 metres down. ${t} aboard. Somewhere among them: ${e} Undertow.`,youAre:t=>`You are the ${t}.`,fellow:t=>` Your fellow Undertow: ${t}.`,theVote:"The vote",lastWordsDivider:"Last words",proposal:(t,e,n)=>`${t} wants to drag ${e??"nobody"} under${n?`: "${n}"`:"."}`,scanResult:(t,e,n)=>`${t} pinged ${e}: the echo reads ${n.toUpperCase()}.`,protectResult:(t,e,n)=>`${t} sealed ${e} in the med bay.${n?" It saved them.":""}`,readResult:(t,e,n)=>`${t} read ${e}'s file: ${n}.`,clue:(t,e)=>`Station log for ${t}: at least one of ${e} is Undertow.`,dragged:t=>`${t} was dragged under in the night.`,quiet:"Nobody was taken last night.",firstNight:"The first night is calm. Everyone wakes.",lastWordsTag:"last words",airlockedEv:(t,e)=>`${t} is pushed into the airlock.${e?` They were ${e}.`:""}`,tie:"The vote is tied. Nobody goes into the airlock.",held:"The crew holds its vote.",hullEv:(t,e)=>`The hull groans. Integrity ${t}/${e}.`,reasons:{all_undertow_gone:"Every Undertow has been airlocked.",undertow_parity:"The Undertow now match the crew. The station is theirs.",hull_breach:"The hull gives way. The sea comes in.",round_limit:"The rescue never comes."},crewWins:"The crew survives",undertowWins:"The Undertow win",listSep:", ",minds:"Agent minds",mindsHint:"Pick a crew member to look inside that agent. Bars: how likely it thinks each player is Undertow. The colour shows the truth.",latestThought:"Latest thought",privateNotes:"Private notes",trace:"ReAct trace",traceSummary:(t,e,n)=>`day ${t} \xB7 ${e}${n?" \xB7 fell back to rule-based":""}`,invalid:"invalid",yourRole:"Your role",fellowList:t=>`Fellow Undertow: ${t}`,yourIntel:"Your intel",nothingYet:"Nothing yet.",onBoard:"On board",howTo:"How to play",rules:["Each night the Undertow drag one crew member under (not the first night). Each day everyone speaks, then votes to airlock one person or skip. An airlock needs a strict plurality and more votes than skip.","A day without an airlocking costs one hull point. At zero the station floods and the Undertow win. The crew win when every Undertow is gone; the Undertow win when they match the crew in number.","Nobody learns who the lost really were, except the Archivist. Attach claims to your speech so the agents can track what you assert. Lying is allowed."],actionRejected:"action rejected",newGame:"New game",saveReplay:"Save replay",copyReplay:"Copy replay",thinking:(t,e)=>`${t} ${e>1?"are":"is"} thinking\u2026`,waiting:"Waiting\u2026",watching:"Watching the crew.",verbs:{drag:"Drag under",scan:"Ping with sonar",protect:"Seal in the med bay",read:"Read the file of"},nobody:"Nobody",voteToAirlock:"Vote to airlock",speakPh:`Say something to the crew\u2026 (e.g. "I pinged Bram last night, he is clean. I'm voting Mara.")`,lastPh:"Your last words\u2026",claimTypes:{accuse:"accuse",vouch:"vouch for",intend_vote:"intend to vote",role:"claim a role",scan:"sonar result",clue:"log clue",protect:"sealed",read:"read a file"},addClaim:"Add claim",add:"Add",yourTurn:"Your turn to speak.",goingOut:"You are going into the airlock. Last words:",speak:"Speak",sayIt:"Say it",enterHint:"Enter to send \xB7 Shift+Enter for a new line",saved:"Saved. Open it from the start screen to watch it again.",copied:"Copied. Paste it on the start screen to watch it again.",copyThis:"Copy this text:",prevPhase:"previous phase",stepBack:"step back",play:"play",pause:"pause",stepFwd:"step forward",nextPhase:"next phase",leaveReplay:"Leave replay",replayPos:"replay position",paceShort:"pace"},sn={docTitle:"\u6697\u6D41 \xB7 Meridian-9",brandSub:"Meridian-9 \xB7 \u6DF1\u5EA6 4,000 \u7C73",langLabel:"\u8BED\u8A00",setupKicker:"\u7AD9\u52A1\u65E5\u5FD7 \xB7 \u7B2C 0 \u6761",setupTitle:"\u6D77\u6C9F\u91CC\u4E0A\u6765\u4E86\u4EC0\u4E48\u4E1C\u897F\u3002",setupLede:"\u4F60\u662F\u6D77\u5E95\u79D1\u8003\u7AD9\u4E0A\u7684\u4E00\u5C0F\u961F\u8239\u5458\u4E4B\u4E00\u3002\u5176\u4E2D\u6709\u4E9B\u4EBA\u5DF2\u7ECF\u4E0D\u662F\u4ED6\u4EEC\u81EA\u5DF1\u4E86\u3002\u548C AI \u961F\u53CB\u4E00\u8D77\u4EA4\u8C08\u3001\u865A\u5F20\u58F0\u52BF\u3001\u63A8\u7406\u3001\u6295\u7968\u3002\u5B83\u4EEC\u5404\u81EA\u6709\u79C1\u4EBA\u8BB0\u5FC6\uFF0C\u5BF9\u6BCF\u4E2A\u4EBA\u90FD\u6709\u4E00\u5957\u5224\u65AD\uFF0C\u5FC5\u8981\u65F6\u4E5F\u4F1A\u8BF4\u8C0E\u3002",factsCrew:"\u8239\u5458",factsCrewValue:"5 \u5230 10 \u4EBA",factsAi:"AI \u5EA7\u4F4D",factsAiValue:"\u8BB0\u5FC6\u3001\u4FE1\u5FF5\u3001\u8BC8\u552C",factsPlay:"\u4E00\u5C40",factsPlayValue:"\u5927\u7EA6 10 \u5206\u949F",formTitle:"\u4E0B\u6F5C\u8BA1\u5212",yourName:"\u4F60\u7684\u540D\u5B57",defaultName:"\u4F60",crewSize:"\u8239\u5458\u4EBA\u6570",modeLabel:"\u5EA7\u4F4D",modePlay:"\u4EB2\u81EA\u4E0A\u573A",modeWatch:"\u89C2\u770B\u4E00\u5C40\u5168 AI \u5BF9\u5C40\uFF0C\u5E76\u770B\u5230\u5B83\u4EEC\u5728\u60F3\u4EC0\u4E48",aiCrew:"AI \u8239\u5458",seed:"\u968F\u673A\u79CD\u5B50",pace:"\u8282\u594F",paceUnit:"\u6BEB\u79D2 / \u6BCF\u53E5 AI \u53D1\u8A00",descend:"\u4E0B\u6F5C",replayTitle:"\u89C2\u770B\u56DE\u653E",replayFile:"\u56DE\u653E\u6587\u4EF6",replayPaste:"\u6216\u8005\u7C98\u8D34",replayPastePh:"\u628A\u590D\u5236\u7684\u56DE\u653E\u7C98\u8D34\u5230\u8FD9\u91CC",replayWatch:"\u89C2\u770B",serverConnected:"\u5DF2\u8FDE\u63A5 Undertow \u670D\u52A1\u5668\u3002",serverLlm:"\u53EF\u4EE5\u4F7F\u7528\u5927\u6A21\u578B\u9A71\u52A8\u7684 AI\u3002",serverNoLlm:"\u5728\u670D\u52A1\u5668\u4E0A\u8BBE\u7F6E API \u5BC6\u94A5\u548C\u6A21\u578B\u540E\uFF0C\u53EF\u4EE5\u4F7F\u7528\u5927\u6A21\u578B\u9A71\u52A8\u7684 AI\u3002",browserOnly:"\u5B8C\u5168\u5728\u6D4F\u89C8\u5668\u91CC\u8FD0\u884C\u3002\u542F\u52A8 Node \u670D\u52A1\u5668\u540E\u53EF\u4EE5\u4F7F\u7528 Claude \u6216\u517C\u5BB9 OpenAI \u63A5\u53E3\u7684\u6A21\u578B\u3002",couldNotStart:t=>`\u65E0\u6CD5\u5F00\u59CB\uFF1A${t}`,kind:{heuristic:"\u89C4\u5219\u578B AI\uFF08\u79BB\u7EBF\uFF09","mock-llm":"\u6A21\u62DF\u5927\u6A21\u578B AI\uFF08\u79BB\u7EBF\uFF0C\u5B8C\u6574 ReAct \u6D41\u7A0B\uFF09",anthropic:"Claude AI\uFF08\u670D\u52A1\u5668\uFF09",openai:"\u517C\u5BB9 OpenAI \u7684\u6A21\u578B\uFF08\u670D\u52A1\u5668\uFF09"},replayErr:{not_json:"\u8FD9\u4E0D\u662F\u56DE\u653E\u6587\u4EF6\uFF08\u4E0D\u662F JSON\uFF09\u3002",not_replay:"\u8FD9\u4E0D\u662F Undertow \u7684\u56DE\u653E\u3002",version:"\u8FD9\u4E2A\u56DE\u653E\u6765\u81EA\u66F4\u65B0\u7684\u7248\u672C\u3002",incomplete:"\u56DE\u653E\u4E0D\u5B8C\u6574\u3002"},gameOver:"\u5BF9\u5C40\u7ED3\u675F",night:t=>`\u7B2C ${t} \u591C`,day:t=>`\u7B2C ${t} \u5929`,discussion:"\u8BA8\u8BBA",vote:"\u6295\u7968",lastWords:"\u9057\u8A00",hull:"\u8239\u58F3",hullTitle:"\u8239\u58F3\u5B8C\u6574\u5EA6",usage:(t,e,n)=>`${t} \u6B21\u6A21\u578B\u8C03\u7528 \xB7 \u8F93\u5165 ${e}k / \u8F93\u51FA ${n}k`,kindShort:{heuristic:"\u89C4\u5219\u578B","mock-llm":"\u6A21\u62DF\u5927\u6A21\u578B",anthropic:"Claude",openai:"\u517C\u5BB9 OpenAI"},roster:"\u8239\u5458\u540D\u5355",you:"\u4F60",partner:"\u540C\u4F34",thatsYou:"\u8FD9\u662F\u4F60",claims:t=>`\u81EA\u79F0${t}`,draggedUnder:"\u88AB\u62D6\u4E0B\u6C34",airlocked:"\u88AB\u63A8\u51FA\u6C14\u95F8",voteIntents:t=>`${t} \u7968\u610F\u5411`,suspicion:t=>`\u8239\u5458 AI \u7684\u5E73\u5747\u6000\u7591\u5EA6\uFF1A${t}%`,chip:{role:t=>`\u8EAB\u4EFD\uFF1A${t}`,scan:(t,e,n)=>`\u7B2C${t}\u591C\u63A2\u6D4B\uFF1A${e} = ${n}`,protect:(t,e)=>`\u7B2C${t}\u591C\u5C01\u5B58 ${e}`,read:(t,e,n)=>`\u7B2C${t}\u591C\u6863\u6848\uFF1A${e} = ${n}`,clue:(t,e)=>`\u7B2C${t}\u591C\u7EBF\u7D22\uFF1A${e}`,accuse:t=>`\u6307\u8BA4 ${t}`,vouch:t=>`\u62C5\u4FDD ${t}`,vote:t=>`\u6295 ${t}`},skip:"\u5F03\u7968",remove:"\u79FB\u9664",crewWord:"\u8239\u5458",undertowWord:"\u6697\u6D41",private:"\u79C1\u5BC6",intro:(t,e)=>`Meridian-9\uFF0C\u6D77\u9762\u4EE5\u4E0B 4,000 \u7C73\u3002\u7AD9\u4E0A ${t} \u4EBA\uFF0C\u5176\u4E2D\u85CF\u7740 ${e} \u4E2A\u6697\u6D41\u3002`,youAre:t=>`\u4F60\u7684\u8EAB\u4EFD\u662F${t}\u3002`,fellow:t=>`\u4F60\u7684\u6697\u6D41\u540C\u4F34\uFF1A${t}\u3002`,theVote:"\u6295\u7968",lastWordsDivider:"\u9057\u8A00",proposal:(t,e,n)=>`${t}\u60F3\u628A${e??"\u6CA1\u4EBA"}\u62D6\u4E0B\u6C34${n?`\uFF1A\u201C${n}\u201D`:"\u3002"}`,scanResult:(t,e,n)=>`${t}\u63A2\u6D4B\u4E86${e}\uFF1A\u56DE\u58F0\u663E\u793A\u4E3A${n}\u3002`,protectResult:(t,e,n)=>`${t}\u628A${e}\u5C01\u8FDB\u4E86\u533B\u7597\u8231\u3002${n?"\u8FD9\u6551\u4E86\u4E00\u547D\u3002":""}`,readResult:(t,e,n)=>`${t}\u67E5\u9605\u4E86${e}\u7684\u6863\u6848\uFF1A${n}\u3002`,clue:(t,e)=>`\u7ED9${t}\u7684\u7AD9\u52A1\u65E5\u5FD7\uFF1A${e}\u4E2D\u81F3\u5C11\u6709\u4E00\u4E2A\u6697\u6D41\u3002`,dragged:t=>`${t}\u5728\u591C\u91CC\u88AB\u62D6\u4E0B\u4E86\u6C34\u3002`,quiet:"\u6628\u665A\u6CA1\u6709\u4EBA\u88AB\u5E26\u8D70\u3002",firstNight:"\u7B2C\u4E00\u591C\u5F88\u5E73\u9759\u3002\u6240\u6709\u4EBA\u90FD\u9192\u4E86\u8FC7\u6765\u3002",lastWordsTag:"\u9057\u8A00",airlockedEv:(t,e)=>`${t}\u88AB\u63A8\u8FDB\u4E86\u6C14\u95F8\u3002${e?`\u8EAB\u4EFD\u662F${e}\u3002`:""}`,tie:"\u7968\u6570\u6301\u5E73\u3002\u6CA1\u6709\u4EBA\u88AB\u63A8\u8FDB\u6C14\u95F8\u3002",held:"\u8239\u5458\u4EEC\u51B3\u5B9A\u8FD9\u8F6E\u4E0D\u63A8\u4EBA\u3002",hullEv:(t,e)=>`\u8239\u58F3\u5728\u547B\u541F\u3002\u5B8C\u6574\u5EA6 ${t}/${e}\u3002`,reasons:{all_undertow_gone:"\u6240\u6709\u6697\u6D41\u90FD\u88AB\u63A8\u51FA\u4E86\u6C14\u95F8\u3002",undertow_parity:"\u6697\u6D41\u7684\u4EBA\u6570\u5DF2\u4E0E\u8239\u5458\u6301\u5E73\u3002\u79D1\u8003\u7AD9\u5F52\u4ED6\u4EEC\u4E86\u3002",hull_breach:"\u8239\u58F3\u6491\u4E0D\u4F4F\u4E86\u3002\u6D77\u6C34\u6D8C\u4E86\u8FDB\u6765\u3002",round_limit:"\u6551\u63F4\u59CB\u7EC8\u6CA1\u6709\u6765\u3002"},crewWins:"\u8239\u5458\u6D3B\u4E86\u4E0B\u6765",undertowWins:"\u6697\u6D41\u83B7\u80DC",listSep:"\u3001",minds:"AI \u7684\u5185\u5FC3",mindsHint:"\u9009\u4E00\u540D\u8239\u5458\uFF0C\u770B\u770B\u8FD9\u4E2A AI \u5728\u60F3\u4EC0\u4E48\u3002\u6761\u5F62\uFF1A\u5B83\u8BA4\u4E3A\u6BCF\u4E2A\u4EBA\u662F\u6697\u6D41\u7684\u53EF\u80FD\u6027\uFF0C\u989C\u8272\u8868\u793A\u771F\u5B9E\u8EAB\u4EFD\u3002",latestThought:"\u6700\u65B0\u60F3\u6CD5",privateNotes:"\u79C1\u4EBA\u7B14\u8BB0",trace:"ReAct \u8F68\u8FF9",traceSummary:(t,e,n)=>`\u7B2C ${t} \u5929 \xB7 ${e}${n?" \xB7 \u9000\u56DE\u89C4\u5219\u578B":""}`,invalid:"\u65E0\u6548",yourRole:"\u4F60\u7684\u8EAB\u4EFD",fellowList:t=>`\u6697\u6D41\u540C\u4F34\uFF1A${t}`,yourIntel:"\u4F60\u7684\u60C5\u62A5",nothingYet:"\u6682\u65F6\u6CA1\u6709\u3002",onBoard:"\u7AD9\u4E0A\u914D\u7F6E",howTo:"\u73A9\u6CD5",rules:["\u6BCF\u665A\u6697\u6D41\u4F1A\u628A\u4E00\u540D\u8239\u5458\u62D6\u4E0B\u6C34\uFF08\u7B2C\u4E00\u591C\u9664\u5916\uFF09\u3002\u6BCF\u5929\u6240\u6709\u4EBA\u8F6E\u6D41\u53D1\u8A00\uFF0C\u7136\u540E\u6295\u7968\u628A\u4E00\u4E2A\u4EBA\u63A8\u51FA\u6C14\u95F8\uFF0C\u6216\u8005\u5F03\u7968\u3002\u63A8\u4EBA\u9700\u8981\u76F8\u5BF9\u591A\u6570\uFF0C\u5E76\u4E14\u7968\u6570\u591A\u4E8E\u5F03\u7968\u3002","\u4E00\u5929\u6CA1\u6709\u63A8\u51FA\u4EFB\u4F55\u4EBA\uFF0C\u8239\u58F3\u5C31\u6389\u4E00\u683C\u3002\u8239\u58F3\u5F52\u96F6\u65F6\u79D1\u8003\u7AD9\u8FDB\u6C34\uFF0C\u6697\u6D41\u83B7\u80DC\u3002\u6240\u6709\u6697\u6D41\u90FD\u88AB\u63A8\u51FA\u65F6\u8239\u5458\u83B7\u80DC\uFF1B\u6697\u6D41\u4EBA\u6570\u4E0E\u8239\u5458\u6301\u5E73\u65F6\u6697\u6D41\u83B7\u80DC\u3002","\u9664\u4E86\u6863\u6848\u5458\uFF0C\u6CA1\u4EBA\u77E5\u9053\u9047\u96BE\u8005\u7684\u771F\u5B9E\u8EAB\u4EFD\u3002\u7ED9\u4F60\u7684\u53D1\u8A00\u9644\u4E0A\u58F0\u660E\uFF0CAI \u624D\u80FD\u8FFD\u8E2A\u4F60\u8BF4\u4E86\u4EC0\u4E48\u3002\u53EF\u4EE5\u8BF4\u8C0E\u3002"],actionRejected:"\u64CD\u4F5C\u88AB\u62D2\u7EDD",newGame:"\u65B0\u7684\u4E00\u5C40",saveReplay:"\u4FDD\u5B58\u56DE\u653E",copyReplay:"\u590D\u5236\u56DE\u653E",thinking:t=>`${t}\u6B63\u5728\u601D\u8003\u2026`,waiting:"\u7B49\u5F85\u4E2D\u2026",watching:"\u6B63\u5728\u89C2\u770B\u8239\u5458\u3002",verbs:{drag:"\u62D6\u4E0B\u6C34",scan:"\u7528\u58F0\u5450\u63A2\u6D4B",protect:"\u5C01\u8FDB\u533B\u7597\u8231",read:"\u67E5\u9605\u6863\u6848"},nobody:"\u4E0D\u9009",voteToAirlock:"\u6295\u7968\u63A8\u51FA\u6C14\u95F8",speakPh:"\u5BF9\u8239\u5458\u4EEC\u8BF4\u70B9\u4EC0\u4E48\u2026\u2026\uFF08\u4F8B\u5982\uFF1A\u201C\u6211\u6628\u665A\u63A2\u6D4B\u4E86 Bram\uFF0C\u4ED6\u662F\u6E05\u767D\u7684\u3002\u6211\u6295 Mara\u3002\u201D\uFF09",lastPh:"\u4F60\u7684\u9057\u8A00\u2026\u2026",claimTypes:{accuse:"\u6307\u8BA4",vouch:"\u62C5\u4FDD",intend_vote:"\u6295\u7968\u610F\u5411",role:"\u58F0\u79F0\u8EAB\u4EFD",scan:"\u58F0\u5450\u7ED3\u679C",clue:"\u65E5\u5FD7\u7EBF\u7D22",protect:"\u5C01\u5B58",read:"\u67E5\u9605\u6863\u6848"},addClaim:"\u6DFB\u52A0\u58F0\u660E",add:"\u6DFB\u52A0",yourTurn:"\u8F6E\u5230\u4F60\u53D1\u8A00\u4E86\u3002",goingOut:"\u4F60\u8981\u88AB\u63A8\u8FDB\u6C14\u95F8\u4E86\u3002\u6700\u540E\u8BF4\u70B9\u4EC0\u4E48\uFF1A",speak:"\u53D1\u8A00",sayIt:"\u8BF4\u51FA\u6765",enterHint:"\u56DE\u8F66\u53D1\u9001 \xB7 Shift+\u56DE\u8F66\u6362\u884C",saved:"\u5DF2\u4FDD\u5B58\u3002\u5728\u5F00\u59CB\u9875\u9762\u6253\u5F00\u5B83\uFF0C\u5C31\u80FD\u518D\u770B\u4E00\u904D\u3002",copied:"\u5DF2\u590D\u5236\u3002\u7C98\u8D34\u5230\u5F00\u59CB\u9875\u9762\uFF0C\u5C31\u80FD\u518D\u770B\u4E00\u904D\u3002",copyThis:"\u590D\u5236\u8FD9\u6BB5\u6587\u5B57\uFF1A",prevPhase:"\u4E0A\u4E00\u9636\u6BB5",stepBack:"\u540E\u9000\u4E00\u6B65",play:"\u64AD\u653E",pause:"\u6682\u505C",stepFwd:"\u524D\u8FDB\u4E00\u6B65",nextPhase:"\u4E0B\u4E00\u9636\u6BB5",leaveReplay:"\u9000\u51FA\u56DE\u653E",replayPos:"\u56DE\u653E\u4F4D\u7F6E",paceShort:"\u8282\u594F"},an={en:rn,zh:sn},je="en";function He(t){je=t}function W(){return je}function x(){return an[je]}function c(t,e={},...n){let r=document.createElement(t);for(let[s,a]of Object.entries(e))a==null||a===!1||(s.startsWith("on")&&typeof a=="function"?r.addEventListener(s.slice(2).toLowerCase(),a):s==="class"?r.className=String(a):s==="style"?r.setAttribute("style",String(a)):r.setAttribute(s,a===!0?"":String(a)));for(let s of n.flat())s!=null&&s!==!1&&r.append(s);return r}var R=t=>document.getElementById(t),F=null,j=null,Y=0,Z=[],De=new Set,O=null,Q=null,Ue=!1,X=null,z="",vt="undertow.lang";function on(){let t=new URLSearchParams(location.search).get("lang");if(t)return me(t);try{let e=localStorage.getItem(vt);if(e)return me(e)}catch{}return navigator.language?.toLowerCase().startsWith("zh")?"zh":"en"}function wt(){let t=x(),e=W();document.documentElement.lang=e==="zh"?"zh-CN":"en",document.body.dataset.lang=e,document.title=x().docTitle;for(let n of document.querySelectorAll("[data-t]"))n.textContent=String(t[n.dataset.t]??"");for(let n of document.querySelectorAll("[data-t-ph]"))n.setAttribute("placeholder",String(t[n.dataset.tPh]??""));for(let n of document.querySelectorAll("[data-t-aria]"))n.setAttribute("aria-label",String(t[n.dataset.tAria]??""));for(let n of document.querySelectorAll(".lang button"))n.setAttribute("aria-pressed",String(n.dataset.lang===e))}function ln(t){if(t===W())return;He(t);try{localStorage.setItem(vt,t)}catch{}let e=R("name"),n=!e.value.trim()||e.value==="You"||e.value==="\u4F60";if(wt(),n&&(e.value=x().defaultName),Ae(),F?.setLang(t),j){let r=R("actions").querySelector("textarea")?.value;R("log").replaceChildren(),Y=0,z="",R("actions").replaceChildren(),Fe();let s=R("actions").querySelector("textarea");s&&r&&(s.value=r,s.dispatchEvent(new Event("input")))}}function Ae(){let t=R("agent"),e=t.value,n=Q??["heuristic","mock-llm"];t.replaceChildren(...n.map(r=>c("option",{value:r},x().kind[r]))),e&&n.includes(e)&&(t.value=e),R("server-note").textContent=Q?x().serverConnected+(Q.includes("anthropic")||Q.includes("openai")?x().serverLlm:x().serverNoLlm):x().browserOnly,R("pace-out").textContent=`${R("pace").value} ${x().paceUnit}`}async function cn(){He(on()),wt(),R("name").value=x().defaultName;for(let e of document.querySelectorAll(".lang button"))e.addEventListener("click",()=>ln(me(e.dataset.lang)));R("seed").value=String(Math.floor(Math.random()*1e5)),R("pace").addEventListener("input",Ae),Ae(),Q=await mt(),Ae(),R("start").addEventListener("click",()=>{dn()});let t=R("replay-file");t.addEventListener("change",()=>{let e=t.files?.[0];e&&e.text().then(ft)}),R("replay-paste-go").addEventListener("click",()=>ft(R("replay-paste").value))}function ft(t){try{let e=yt(t);X=null,bt(new re(e),700)}catch(e){R("replay-error").textContent=e instanceof B?x().replayErr[e.code]:e.message}}function bt(t,e){F=t,Y=0,Z=[],O=null,z="",R("log").replaceChildren(),R("setup").hidden=!0,R("game").hidden=!1,R("pace-live").value=String(e),F.subscribe(n=>{X?.push(n),j=n,Fe()})}async function dn(){let t={players:Number(R("players").value),seed:Number(R("seed").value)||1,mode:document.querySelector("input[name=mode]:checked").value,name:R("name").value.trim()||x().defaultName,agent:R("agent").value,paceMs:Number(R("pace").value),lang:W()},e;try{e=Q?await Se.create(t):new Re(t)}catch(n){R("server-note").textContent=x().couldNotStart(n.message);return}X=new xe,bt(e,t.paceMs)}function C(t){return j?.players.find(e=>e.id===t)?.name??t}function qe(t){return t.map(C).join(x().listSep)}function D(t){return te(t,W())}function ae(t){return Xe(t,W())}function kt(t){return String(t+1).padStart(2,"0")}function Fe(){j&&(un(),hn(),mn(),gn(),yn())}function un(){let t=j,e=x(),n=t.phase==="ended"?e.gameOver:t.phase==="night"?e.night(t.round):`${e.day(t.round)} \xB7 ${t.phase==="day_discussion"?e.discussion:t.phase==="day_vote"?e.vote:e.lastWords}`;R("phase").textContent=n,document.body.dataset.phase=t.phase;let r=[];for(let a=0;a<t.maxHull;a++)r.push(c("span",{class:`seg ${a<t.hull?"ok":"lost"}`}));R("hull").replaceChildren(c("span",{class:"k"},e.hull),c("span",{class:"segs",title:e.hullTitle},r),c("span",{class:"num"},`${t.hull}/${t.maxHull}`));let s=t.usage&&t.usage.calls?` \xB7 ${e.usage(t.usage.calls,(t.usage.inputTokens/1e3).toFixed(1),(t.usage.outputTokens/1e3).toFixed(1))}`:"";R("meta").textContent=`${e.kindShort[t.agentKind]??t.agentKind}${s}`}function pn(t){let e=new Map;for(let n of t)if(!(n.data.type!=="speech"&&n.data.type!=="last_words"))for(let r of n.data.speech.claims){let s=r.type==="role"?r.role:r.type==="scan"?"sonar":r.type==="read"?"archivist":r.type==="protect"?"medic":r.type==="clue"?"diver":null;s&&e.set(n.data.player,s)}return e}function hn(){let t=j,e=x(),n=pn(t.events),r=new Map;for(let i of t.events)if(!(i.round!==t.round||i.data.type!=="speech"))for(let l of i.data.speech.claims)l.type==="intend_vote"&&l.target!=="skip"&&r.set(l.target,(r.get(l.target)??0)+1);let s=new Map;if(t.insights&&t.roles)for(let i of t.players){let l=[];for(let[o,h]of Object.entries(t.insights)){if(o===i.id||A[t.roles[o]].faction!=="crew")continue;let d=h.beliefs[i.id];typeof d=="number"&&l.push(d)}l.length&&s.set(i.id,l.reduce((o,h)=>o+h,0)/l.length)}let a=t.players.map(i=>{let l=t.roles?.[i.id],o=t.partners.includes(i.id),h=t.thinking.includes(i.id),d=s.get(i.id),m=!!t.insights;return c(m?"button":"div",{class:`card ${i.alive?"":"dead"} ${i.human?"you":""} ${o?"partner":""} ${l?A[l].faction:""} ${O===i.id?"selected":""}`,type:m?"button":void 0,"aria-pressed":m?String(O===i.id):void 0,onclick:()=>{t.insights&&(O=i.id,Fe())}},c("span",{class:"seat"},kt(i.seat)),c("span",{class:"who"},c("span",{class:"nm"},i.name,i.human?c("span",{class:"tag"},e.you):null,o?c("span",{class:"tag undertow"},e.partner):null),c("span",{class:"job"},i.human?e.thatsYou:Je(i,W()),h?c("span",{class:"dots"}," \xB7\xB7\xB7"):null),c("span",{class:"badges"},l?c("span",{class:`badge role ${A[l].faction}`},D(l)):null,n.get(i.id)?c("span",{class:"badge claim"},e.claims(D(n.get(i.id)))):null,i.alive?null:c("span",{class:"badge fate"},i.fate==="dragged"?e.draggedUnder:e.airlocked),r.get(i.id)&&i.alive&&t.phase!=="night"?c("span",{class:"badge votes"},e.voteIntents(r.get(i.id))):null),d!==void 0&&i.alive?c("span",{class:"susbar",title:e.suspicion((d*100).toFixed(0))},c("span",{style:`width:${(d*100).toFixed(0)}%`})):null))});R("roster").replaceChildren(...a)}function $t(t,e){let n=x().chip,r="";switch(t.type){case"role":r=n.role(D(t.role));break;case"scan":r=n.scan(t.round,C(t.target),ae(t.result));break;case"protect":r=n.protect(t.round,C(t.target));break;case"read":r=n.read(t.round,C(t.target),D(t.role));break;case"clue":r=n.clue(t.round,t.suspects.map(C).join(" / "));break;case"accuse":r=n.accuse(C(t.target));break;case"vouch":r=n.vouch(C(t.target));break;case"intend_vote":r=n.vote(t.target==="skip"?x().skip:C(t.target));break}let s=t.type==="accuse"||t.type==="scan"&&t.result==="undertow"||t.type==="intend_vote";return c("span",{class:`chip ${t.type} ${s?"hostile":""}`},r,e?c("button",{class:"x",type:"button",onclick:e,title:x().remove,"aria-label":x().remove},"\xD7"):null)}function Pt(t){let e=j,n=x(),r=t.data,s=t.visibleTo!=="all",a=(i,l="")=>c("div",{class:`sys ${l} ${s?"private":""}`},s?c("span",{class:"lock"},n.private):null,c("span",{class:"tx"},i));switch(r.type){case"game_start":return a(n.intro(r.players.length,r.setup.drowned+r.setup.siren),"intro");case"role_assigned":return r.player!==e.you?null:a(n.youAre(D(r.role))+(r.partners.length?n.fellow(qe(r.partners)):""),"you");case"phase":return r.phase==="ended"?null:c("div",{class:`divider ${r.phase}`},c("span",{},r.phase==="night"?n.night(r.round):r.phase==="day_discussion"?n.day(r.round):r.phase==="day_vote"?n.theVote:n.lastWordsDivider));case"undertow_proposal":return a(n.proposal(C(r.player),r.target?C(r.target):null,r.note),"undertow");case"scan_result":return a(n.scanResult(C(r.player),C(r.target),ae(r.result)),"intel");case"protect_result":return a(n.protectResult(C(r.player),C(r.target),!!r.saved),"intel");case"read_result":return a(n.readResult(C(r.player),C(r.target),D(r.role)),"intel");case"clue":return a(n.clue(C(r.player),qe(r.suspects)),"intel");case"dragged":return a(n.dragged(C(r.player)),"death");case"quiet_night":return t.round>1?a(n.quiet,"calm"):a(n.firstNight,"calm");case"speech":case"last_words":{let i=e.players.find(l=>l.id===r.player);return c("div",{class:`speech ${r.type==="last_words"?"last":""} ${i?.human?"mine":""}`},c("div",{class:"speaker"},c("span",{class:"seat"},i?kt(i.seat):"\xB7\xB7"),c("span",{class:"sn"},i?.name??r.player)),c("div",{class:"body"},r.type==="last_words"?c("div",{class:"tag"},n.lastWordsTag):null,c("p",{class:"text"},r.speech.text||"\u2026"),r.speech.claims.length?c("div",{class:"chips"},r.speech.claims.map(l=>$t(l))):null))}case"votes":{let i=o=>o==="skip"?n.skip:C(o),l=Object.entries(r.tally).sort((o,h)=>h[1]-o[1]);return c("div",{class:"votes"},c("div",{class:"tally"},l.map(([o,h])=>c("span",{class:"t"},c("b",{},String(h))," ",i(o)))),c("div",{class:"rows"},Object.entries(r.votes).map(([o,h])=>c("span",{class:"vote"},`${C(o)} \u2192 ${i(h)}`))))}case"airlocked":return a(n.airlockedEv(C(r.player),r.faction?ae(r.faction):null),"death");case"no_airlock":return a(r.reason==="tie"?n.tie:n.held,"warn");case"hull":return a(n.hullEv(r.hull,e.maxHull),"warn");case"game_end":return c("div",{class:`end ${r.winner}`},c("div",{class:"big"},r.winner==="crew"?n.crewWins:n.undertowWins),c("p",{},n.reasons[r.reason]))}return null}function mn(){let t=j,e=R("log");t.events.length<Y&&(e.replaceChildren(),Y=0);let n=e.scrollHeight-e.scrollTop-e.clientHeight<120;for(let r of t.events.slice(Y)){let s=Pt(r);s&&e.append(s)}Y=t.events.length,n&&(e.scrollTop=e.scrollHeight)}function gn(){let t=j,e=x(),n=R("side");if(t.insights&&Object.keys(t.insights).length){let a=Object.keys(t.insights);(!O||!t.insights[O])&&(O=a[0]);let i=t.insights[O],l=t.roles?.[O],o=t.players.filter(m=>m.id!==O).map(m=>{let k=i.beliefs[m.id]??0,v=t.roles?A[t.roles[m.id]].faction:null;return c("div",{class:`brow ${m.alive?"":"dead"}`},c("span",{class:"bn"},m.name),c("span",{class:"bbar"},c("span",{class:`fill ${v??""}`,style:`width:${(k*100).toFixed(0)}%`})),c("span",{class:"bv"},`${(k*100).toFixed(0)}`))}),h=(t.traces??[]).filter(m=>m.player===O).slice(-3).reverse(),d=[c("h3",{},e.minds),c("p",{class:"hint"},e.mindsHint),c("div",{class:`mindhead ${l?A[l].faction:""}`},c("strong",{},C(O)),l?c("span",{class:`badge role ${A[l].faction}`},D(l)):null),c("div",{class:"beliefs"},o),i.thought?c("div",{class:"thought"},c("span",{class:"label"},e.latestThought),c("p",{},i.thought)):null,i.notes?.length?c("div",{class:"notes"},c("span",{class:"label"},e.privateNotes),c("ul",{},i.notes.slice(-5).map(m=>c("li",{},m)))):null,h.length?c("div",{class:"traces"},c("span",{class:"label"},e.trace),h.map(m=>c("details",{},c("summary",{},e.traceSummary(m.round,m.kind,m.fallback)),m.steps.map(k=>c("div",{class:"step"},c("code",{},k.tool||e.invalid),k.thought?` ${k.thought}`:"",k.error?c("div",{class:"err"},k.error):null,k.observation?c("div",{class:"obs"},k.observation.slice(0,280)):null))))):null];n.replaceChildren(...d.filter(m=>!!m));return}if(!t.yourRole){n.replaceChildren();return}let r=A[t.yourRole],s=t.events.filter(a=>a.visibleTo!=="all"&&["scan_result","protect_result","read_result","clue","undertow_proposal"].includes(a.data.type));n.replaceChildren(c("div",{class:`rolecard ${r.faction}`},c("div",{class:"rk"},`${e.yourRole} \xB7 ${ae(r.faction)}`),c("div",{class:"rn"},D(t.yourRole)),c("p",{},Qe(t.yourRole,W())),t.partners.length?c("p",{class:"partners"},e.fellowList(qe(t.partners))):null),c("h3",{},e.yourIntel),s.length?c("div",{class:"intel"},s.map(a=>Pt(a))):c("p",{class:"hint"},e.nothingYet),c("h3",{},e.onBoard),c("ul",{class:"setup-list"},Object.entries(t.setup).filter(([,a])=>a>0).map(([a,i])=>c("li",{class:A[a].faction},c("b",{},String(i))," ",D(a)))),c("details",{class:"rules"},c("summary",{},e.howTo),e.rules.map(a=>c("p",{},a))))}async function se(t){if(!(!F||Ue)){Ue=!0;try{let e=await F.act(t);e.ok?(Z=[],De=new Set):R("action-error").textContent=e.error??x().actionRejected}finally{Ue=!1}}}function yn(){let t=j,e=x(),n=R("actions"),r=t.pending,s=r?`${r.kind}:${r.round}:${t.events.length}`:`none:${t.thinking.join(",")}:${t.phase}`;if(r&&(r.kind==="speak"||r.kind==="last_words")&&z.startsWith(`${r.kind}:${r.round}`)&&n.querySelector("textarea"))return;if(F instanceof re){z=s,n.querySelector(".replay")||n.replaceChildren(bn(F)),Rt(F);return}if(t.phase==="ended"){if(z===s)return;z=s;let l=c("span",{class:"hint"});n.replaceChildren(c("div",{class:"waiting"},c("button",{class:"primary",onclick:()=>location.reload()},e.newGame),X?.ready?c("button",{onclick:()=>vn(l)},e.saveReplay):null,X?.ready?c("button",{class:"ghost",onclick:()=>{wn(l)}},e.copyReplay):null,l));return}if(z=s,!r){let l=t.thinking.map(C);n.replaceChildren(c("div",{class:"waiting"},c("span",{class:"status"},l.length?e.thinking(l.join(e.listSep),l.length):t.you?e.waiting:e.watching),St()));return}let a=c("div",{id:"action-error",class:"err"}),i=(r.options??[]).filter(l=>l!=="skip");switch(r.kind){case"night":{let l=e.verbs[r.nightAction??"scan"];n.replaceChildren(c("div",{class:"prompt"},l),c("div",{class:"targets"},i.map(o=>c("button",{onclick:()=>{se({kind:"night",target:o})}},C(o))),r.allowNone?c("button",{class:"ghost",onclick:()=>{se({kind:"night",target:null})}},e.nobody):null),a);return}case"vote":n.replaceChildren(c("div",{class:"prompt"},e.voteToAirlock),c("div",{class:"targets"},i.map(l=>c("button",{class:"danger",onclick:()=>{se({kind:"vote",target:l})}},C(l))),c("button",{class:"ghost",onclick:()=>{se({kind:"vote",target:"skip"})}},e.skip)),a);return;case"speak":case"last_words":n.replaceChildren(fn(r.kind,i.length?i:t.players.filter(l=>l.alive&&l.id!==t.you).map(l=>l.id)),a);return}}function fn(t,e){let n=j,r=x(),s=c("textarea",{placeholder:t==="speak"?r.speakPh:r.lastPh,rows:3,"aria-label":t==="speak"?r.yourTurn:r.goingOut}),a=c("div",{class:"chips"}),i=()=>nt(s.value,n.players,n.you,n.round).filter(g=>!De.has(JSON.stringify(g))),l=()=>{let g=new Set;return[...i(),...Z].filter(S=>{let L=JSON.stringify(S);return g.has(L)?!1:(g.add(L),!0)})},o=()=>{a.replaceChildren(...l().map(g=>$t(g,()=>{let S=JSON.stringify(g);Z=Z.filter(L=>JSON.stringify(L)!==S),De.add(S),o()})))};s.addEventListener("input",o);let h=c("select",{"aria-label":r.addClaim},...["accuse","vouch","intend_vote","role","scan","clue","protect","read"].map(g=>c("option",{value:g},r.claimTypes[g]))),d=c("select",{},...e.map(g=>c("option",{value:g},C(g))),c("option",{value:"skip"},r.skip)),m=c("select",{}),k=c("select",{},...e.map(g=>c("option",{value:g},C(g)))),v=c("select",{},...e.map(g=>c("option",{value:g},C(g)))),y=()=>{let g=h.value,S=Object.keys(A),L=g==="scan"?["crew","undertow"].map(q=>[q,ae(q)]):g==="role"||g==="read"?S.map(q=>[q,D(q)]):[];m.replaceChildren(...L.map(([q,ee])=>c("option",{value:q},ee))),m.hidden=!(g==="scan"||g==="role"||g==="read"),d.hidden=g==="role",k.hidden=v.hidden=g!=="clue"};h.addEventListener("change",y),y();let f=()=>{let g=h.value,S=Math.max(1,n.round),L=null;g==="role"?L={type:"role",role:m.value}:g==="intend_vote"?L={type:"intend_vote",target:d.value}:d.value==="skip"?L=null:g==="accuse"||g==="vouch"?L={type:g,target:d.value}:g==="scan"?L={type:"scan",round:S,target:d.value,result:m.value}:g==="read"?L={type:"read",round:S,target:d.value,role:m.value}:g==="protect"?L={type:"protect",round:S,target:d.value}:g==="clue"&&(L={type:"clue",round:S,suspects:[...new Set([d.value,k.value,v.value])]}),L&&(Z.push(L),o())},P=()=>{let g=s.value.trim(),S=l();if(!g&&!S.length)return;let L={text:g||"\u2026",claims:S};se(t==="speak"?{kind:"speak",speech:L}:{kind:"last_words",speech:L})};return s.addEventListener("keydown",g=>{g.key==="Enter"&&!g.shiftKey&&!g.isComposing&&(g.preventDefault(),P())}),setTimeout(()=>s.focus(),0),c("div",{class:"composer"},c("div",{class:"prompt"},t==="speak"?r.yourTurn:r.goingOut),s,a,c("div",{class:"builder"},c("span",{class:"label"},r.addClaim),h,d,k,v,m,c("button",{class:"ghost",type:"button",onclick:f},r.add)),c("div",{class:"row"},c("span",{class:"hint"},r.enterHint),c("button",{class:"primary",onclick:P},t==="speak"?r.speak:r.sayIt)))}function It(){return JSON.stringify(X.build())}function vn(t){let e=new Blob([It()],{type:"application/json"}),n=c("a",{href:URL.createObjectURL(e),download:`undertow-replay-${Date.now()}.json`});document.body.append(n),n.click(),n.remove(),t.textContent=x().saved}async function wn(t){let e=It();try{await navigator.clipboard.writeText(e),t.textContent=x().copied}catch{let n=c("textarea",{class:"replay-dump",readonly:!0});n.value=e,t.replaceChildren(x().copyThis,n),n.select()}}function bn(t){let e=x(),n=c("input",{type:"range",min:"0",max:String(t.length-1),value:String(t.index),"aria-label":e.replayPos,class:"scrub"});n.addEventListener("input",()=>t.seek(Number(n.value)));let r=(a,i,l,o="")=>c("button",{class:o,title:i,"aria-label":i,onclick:l},a),s=()=>{t.playing?t.pause():t.play(),Rt(t)};return c("div",{class:"replay"},c("div",{class:"row"},r("\xAB",e.prevPhase,()=>t.seekPhase(-1)),r("\u2039",e.stepBack,()=>t.seek(t.index-1)),c("button",{class:"primary play",title:e.play,"aria-label":e.play,onclick:s},e.play),r("\u203A",e.stepFwd,()=>t.seek(t.index+1)),r("\xBB",e.nextPhase,()=>t.seekPhase(1)),c("span",{class:"hint pos"}),c("button",{class:"ghost",onclick:()=>location.reload()},e.leaveReplay)),n,St())}function Rt(t){let e=R("actions"),n=e.querySelector(".scrub");n&&document.activeElement!==n&&(n.value=String(t.index));let r=e.querySelector(".pos");r&&(r.textContent=`${t.index+1} / ${t.length}`);let s=e.querySelector(".play");s&&(s.textContent=t.playing?x().pause:x().play,s.title=s.textContent,s.setAttribute("aria-label",s.title))}function St(){let t=c("input",{type:"range",min:"0",max:"3000",step:"100",value:R("pace-live").value});return t.addEventListener("change",()=>{R("pace-live").value=t.value,F?.setPace(Number(t.value))}),c("label",{class:"pace"},x().paceShort,t)}cn();
+
+
+</script>
+</body>
+</html>

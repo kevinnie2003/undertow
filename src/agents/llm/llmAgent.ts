@@ -5,6 +5,7 @@ import type { Persona } from '../personas.js';
 import type { Agent, AgentInsight, Observation } from '../types.js';
 import { parseStep, type AgentStep } from './parse.js';
 import { describeClaims, describeVotes, stateDigest, systemPrompt, taskText } from './prompts.js';
+import type { Lang } from '../../i18n/lang.js';
 import { ProviderError, type ChatMessage, type LLMProvider, type UsageMeter } from './provider.js';
 
 export interface LLMAgentOptions {
@@ -19,6 +20,8 @@ export interface LLMAgentOptions {
   retryDelayMs?: number;
   /** Called after every decision with its full reasoning trace (for spectators/logs). */
   onTrace?: (trace: DecisionTrace) => void;
+  /** The table's language, read at every decision. Defaults to English. */
+  lang?: () => Lang;
 }
 
 export interface TraceStep extends AgentStep {
@@ -66,7 +69,7 @@ export class LLMAgent implements Agent {
   constructor(private opts: LLMAgentOptions) {
     this.id = opts.id;
     this.kind = `llm:${opts.provider.name}`;
-    this.twin = new HeuristicAgent({ id: opts.id, persona: opts.persona, seed: opts.seed });
+    this.twin = new HeuristicAgent({ id: opts.id, persona: opts.persona, seed: opts.seed, lang: opts.lang });
     this.maxSteps = opts.maxSteps ?? 4;
     this.retryDelayMs = opts.retryDelayMs ?? 750;
   }
@@ -85,7 +88,8 @@ export class LLMAgent implements Agent {
     const ctx = this.twin.context(obs);
     const m = this.twin.memory;
     const partnerNames = obs.partners.map((id) => m.name(id));
-    const system = systemPrompt(this.opts.persona, m.name(obs.me), obs.role, partnerNames);
+    const lang = this.opts.lang?.() ?? 'en';
+    const system = systemPrompt(this.opts.persona, m.name(obs.me), obs.role, partnerNames, lang);
     const messages: ChatMessage[] = [
       { role: 'user', content: `${stateDigest(obs, m, this.notes)}\n\nTASK: ${taskText(obs, m)}` },
     ];
@@ -163,7 +167,7 @@ export class LLMAgent implements Agent {
       }
       case 'note': {
         const text = String(step.args.text ?? '').trim().slice(0, 300);
-        if (text) this.notes.push(`Day ${obs.round}: ${text}`);
+        if (text) this.notes.push(this.opts.lang?.() === 'zh' ? `第${obs.round}天：${text}` : `Day ${obs.round}: ${text}`);
         return text ? 'Noted.' : 'Nothing to note.';
       }
       default:

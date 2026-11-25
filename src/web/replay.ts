@@ -99,17 +99,27 @@ export class ReplayRecorder {
   }
 }
 
+/** Why a replay could not be opened. The UI words it in the player's language. */
+export class ReplayError extends Error {
+  constructor(
+    readonly code: 'not_json' | 'not_replay' | 'version' | 'incomplete',
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 export function parseReplay(text: string): Replay {
   let data: unknown;
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error('That is not a replay file (not JSON).');
+    throw new ReplayError('not_json', 'That is not a replay file (not JSON).');
   }
   const r = data as Partial<Replay>;
-  if (!r || r.format !== 'undertow-replay') throw new Error('That is not an Undertow replay.');
-  if (r.version !== 1) throw new Error(`Unsupported replay version ${String(r.version)}.`);
-  if (!Array.isArray(r.events) || !Array.isArray(r.frames) || r.frames.length === 0 || !r.roles) throw new Error('The replay is incomplete.');
+  if (!r || r.format !== 'undertow-replay') throw new ReplayError('not_replay', 'That is not an Undertow replay.');
+  if (r.version !== 1) throw new ReplayError('version', `Unsupported replay version ${String(r.version)}.`);
+  if (!Array.isArray(r.events) || !Array.isArray(r.frames) || r.frames.length === 0 || !r.roles) throw new ReplayError('incomplete', 'The replay is incomplete.');
   return r as Replay;
 }
 
@@ -191,6 +201,9 @@ export class ReplayClient implements GameClient {
   setPace(ms: number) {
     this.paceMs = ms;
   }
+
+  /** A replay replays what was said; only the interface changes language. */
+  setLang() {}
 
   seek(index: number) {
     this.index = Math.max(0, Math.min(this.length - 1, index));
