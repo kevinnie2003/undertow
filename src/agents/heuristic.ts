@@ -129,8 +129,15 @@ export class HeuristicAgent implements Agent {
   }
 
   private render(claims: Claim[], ctx: Ctx, mood?: 'last'): string {
-    const accused = this.memory.accusationsAgainst(this.id, ctx.obs.round).length >= 2;
-    return renderSpeech(claims, this.persona, (id) => this.memory.name(id), this.rng, mood ?? (accused ? 'defend' : undefined));
+    const m = this.memory;
+    const round = ctx.obs.round;
+    const accused = m.accusationsAgainst(this.id, round).length >= 2;
+    // React to the night only in our first words of the day.
+    const firstToday = mood !== 'last' && !m.speeches.some((sp) => sp.round === round && sp.speaker === this.id);
+    const scene = firstToday
+      ? { lost: m.deaths.filter((d) => d.round === round && d.fate === 'dragged').map((d) => d.player), calm: round > 1 && m.quietNights.includes(round) }
+      : undefined;
+    return renderSpeech(claims, this.persona, (id) => m.name(id), this.rng, mood ?? (accused ? 'defend' : undefined), scene);
   }
 
   private top(ids: PlayerId[], score: (id: PlayerId) => number): PlayerId | null {

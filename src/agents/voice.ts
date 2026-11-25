@@ -16,8 +16,31 @@ const OPENERS: Record<Persona['voice'], string[]> = {
   warm: ['Okay, everyone.', 'Hey, all.', 'I know this is hard.', 'Deep breath, team.', ''],
   analytical: ['Let me lay this out.', 'Looking at what we know:', 'Data first.', 'A few observations.', ''],
   nervous: ['Um, okay.', 'I, uh, have to say this.', 'Sorry, this is a lot.', 'Okay okay okay.', ''],
-  dry: ['Well.', 'Lovely night.', 'So.', 'Another fine morning on the sea floor.', ''],
+  dry: ['Well.', 'So.', 'Right then.', ''],
 };
+
+/** First words of the day, reacting to what the night brought. */
+const LOSS: Record<Persona['voice'], ((who: string) => string)[]> = {
+  blunt: [(w) => `${w} is gone. Let's make it count.`, (w) => `They took ${w}. Enough.`],
+  warm: [(w) => `I can't believe ${w} is gone.`, (w) => `Poor ${w}. Let's do right by them.`],
+  analytical: [(w) => `We lost ${w} overnight, which tells us something.`, (w) => `${w} was taken, so ${w} was crew. Let's use that.`],
+  nervous: [(w) => `${w} is... gone. Okay. Okay.`, (w) => `They got ${w}. I could be next.`],
+  dry: [(w) => `So ${w} didn't make it to breakfast.`, (w) => `One fewer for coffee. Goodbye, ${w}.`],
+};
+const CALM: Record<Persona['voice'], string[]> = {
+  blunt: ['Nobody taken. Someone got sealed in, or someone got lucky.'],
+  warm: ['Everyone made it through the night. Thank goodness.'],
+  analytical: ['A quiet night. Either the med bay worked, or they held back.'],
+  nervous: ['Everyone\'s still here? Good. Good.'],
+  dry: ['Lovely night. Nobody drowned.', 'Another fine morning on the sea floor.'],
+};
+
+export interface Scene {
+  /** Crew dragged under last night. */
+  lost: PlayerId[];
+  /** Nobody was taken last night (not counting the calm first night). */
+  calm: boolean;
+}
 
 const QUIET: Record<Persona['voice'], string[]> = {
   blunt: ['I have nothing solid yet. Watching.', 'Nothing to report. Someone give me a reason.', 'Talk is cheap. I want to see votes.'],
@@ -27,9 +50,13 @@ const QUIET: Record<Persona['voice'], string[]> = {
   dry: ['Nothing to add. Shocking, I know.', 'I\'ll save my brilliance for later.', 'No news from my corner of the station.'],
 };
 
-export function renderSpeech(claims: Claim[], persona: Persona, name: NameOf, rng: Rng, mood?: 'defend' | 'last'): string {
+export function renderSpeech(claims: Claim[], persona: Persona, name: NameOf, rng: Rng, mood?: 'defend' | 'last', scene?: Scene): string {
   const parts: string[] = [];
-  const opener = rng.pick(OPENERS[persona.voice]);
+  const opener = scene?.lost.length
+    ? rng.pick(LOSS[persona.voice])(name(scene.lost[0]))
+    : scene?.calm
+      ? rng.pick(CALM[persona.voice])
+      : rng.pick(OPENERS[persona.voice]);
   if (opener) parts.push(opener);
   if (mood === 'last') parts.push(rng.pick(['Before I go:', 'Last thing from me:', 'For the record:']));
   if (mood === 'defend') parts.push(rng.pick(['I am not Undertow.', 'You have the wrong person.', 'Stop looking at me, I\'m crew.']));
@@ -44,7 +71,7 @@ export function renderSpeech(claims: Claim[], persona: Persona, name: NameOf, rn
 function sentence(c: Claim, persona: Persona, name: NameOf, rng: Rng): string {
   switch (c.type) {
     case 'role':
-      return rng.pick([`I'm the ${ROLES[c.role].name}.`, `I'll say it: I'm the ${ROLES[c.role].name}.`, `Cards on the table, ${ROLES[c.role].name}.`]);
+      return rng.pick([`I'm the ${ROLES[c.role].name}.`, `I'll say it: I'm the ${ROLES[c.role].name}.`, `Cards on the table: I'm the ${ROLES[c.role].name}.`]);
     case 'scan':
       return c.result === 'undertow'
         ? rng.pick([`Night ${c.round} I pinged ${name(c.target)}. The echo came back wrong. Undertow.`, `${name(c.target)} pinged Undertow on night ${c.round}.`])
