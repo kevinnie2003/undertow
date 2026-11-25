@@ -133,3 +133,33 @@ describe('beliefs: one clue per night', () => {
     expect(beliefsFor(g, holder).p.get(faker)!).toBeGreaterThan(0.9);
   });
 });
+
+describe('beliefs: targeting and saves', () => {
+  const players = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6'];
+  const setup = { diver: 3, sonar: 1, medic: 1, archivist: 0, drowned: 1, siren: 1 };
+  const run = (m: Memory, params = {}) =>
+    computeBeliefs({ players, alive: new Set(players), setup, memory: m, perspective: 'private', params });
+
+  it('accusing a player I know is crew makes the accuser more suspicious', () => {
+    const m = new Memory('p0');
+    m.role = 'diver';
+    m.claims.push({ round: 1, speaker: 'p1', claim: { type: 'accuse', target: 'p0' }, lastWords: false });
+    const quiet = new Memory('p0');
+    quiet.role = 'diver';
+    const base = run(quiet);
+    const normed = run(m);
+    const flat = run(m, { normaliseTargets: false });
+    expect(normed.p.get('p1')!).toBeGreaterThan(base.p.get('p1')! + 0.01);
+    expect(flat.p.get('p1')!).toBeCloseTo(base.p.get('p1')!, 6);
+  });
+
+  it('a reported save clears the saved player when the medic is genuine', () => {
+    const m = new Memory('p0');
+    m.role = 'diver';
+    m.quietNights.push(2);
+    m.claims.push({ round: 2, speaker: 'p1', claim: { type: 'role', role: 'medic' }, lastWords: false });
+    m.claims.push({ round: 2, speaker: 'p1', claim: { type: 'protect', round: 2, target: 'p2' }, lastWords: false });
+    const b = run(m);
+    expect(b.p.get('p2')!).toBeLessThan(b.p.get('p3')!);
+  });
+});
