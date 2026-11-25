@@ -215,7 +215,7 @@ The setups were tuned through several rounds of simulating, reading transcripts 
 
 ## Testing
 
-`npm test` runs 64 tests in about 6 seconds.
+`npm test` runs 72 tests in about 6 seconds.
 
 - **Engine:** setup and determinism, the calm first night, drags and medic saves, the medic's no-repeat rule, siren echoes, clue invariants, archivist reads, discussion order, strict-plurality votes, ties and skips, hull breach, parity, round limit, last words, faction reveal, input validation, speech sanitising, serialize and resume, event redaction, and claim validation.
 - **Beliefs:** exact enumeration, posteriors that sum to the Undertow count, private versus public knowledge, hard facts from scans and drags, the one-clue-per-night rule, targeting as a choice among the living, and reported Medic saves.
