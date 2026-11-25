@@ -1,5 +1,6 @@
 import type { AgentKind } from '../agents/factory.js';
 import type { Lang } from '../i18n/lang.js';
+import { spaceMixed } from '../i18n/spacing.js';
 
 /** Every word the interface shows, in English and Simplified Chinese. */
 const EN = {
@@ -371,7 +372,16 @@ const ZH: Strings = {
   paceShort: '节奏',
 };
 
-const TABLE: Record<Lang, Strings> = { en: EN, zh: ZH };
+/** Applies Chinese spacing to every worded string, including the ones built from names. */
+function spaced<T>(v: T): T {
+  if (typeof v === 'string') return spaceMixed(v) as T;
+  if (typeof v === 'function') return ((...args: unknown[]) => spaceMixed(String((v as (...a: unknown[]) => unknown)(...args)))) as T;
+  if (Array.isArray(v)) return v.map(spaced) as T;
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, spaced(x)])) as T;
+  return v;
+}
+
+const TABLE: Record<Lang, Strings> = { en: EN, zh: spaced(ZH) };
 
 let current: Lang = 'en';
 

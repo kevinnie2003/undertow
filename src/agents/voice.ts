@@ -2,6 +2,7 @@ import type { Claim, PlayerId } from '../engine/types.js';
 import type { Rng } from '../engine/rng.js';
 import type { Lang } from '../i18n/lang.js';
 import { roleName } from '../i18n/roles.js';
+import { spaceMixed } from '../i18n/spacing.js';
 import type { Persona } from './personas.js';
 
 /**
@@ -203,7 +204,8 @@ export function renderSpeech(
     if (s) parts.push(s);
   }
   if (claims.length === 0 && mood !== 'defend') parts.push(rng.pick(pack.quiet[persona.voice]));
-  return parts.join(pack.join);
+  const text = parts.join(pack.join);
+  return lang === 'zh' ? spaceMixed(text) : text;
 }
 
 function list(ids: PlayerId[], name: NameOf, sep: string, and: string): string {

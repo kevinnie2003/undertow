@@ -19,7 +19,7 @@
   --warn: #d8b24c;
   --night: #8fb0c8;
 
-  --mono: 'JetBrains Mono', 'IBM Plex Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', 'PingFang SC', 'Microsoft YaHei', monospace;
+  --mono: 'JetBrains Mono', 'IBM Plex Mono', 'SFMono-Regular', Menlo, Consolas, 'DejaVu Sans Mono', 'Ubuntu Mono', 'Liberation Mono', 'PingFang SC', 'Microsoft YaHei', monospace;
   --sans: 'IBM Plex Sans', 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Source Han Sans SC', 'Microsoft YaHei', sans-serif;
   --display: 'Barlow Condensed', 'Roboto Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, 'PingFang SC', 'Noto Sans CJK SC', 'Source Han Sans SC', 'Microsoft YaHei', sans-serif;
 
@@ -89,9 +89,14 @@ summary {
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-body[data-lang='zh'] :is(.k, .label, .kicker, h2, h3, dt, legend, .field > span, .prompt, .tag, .badge, .lock, summary) {
-  letter-spacing: 0.06em;
+body[data-lang='zh'] :is(.k, .label, .kicker, h2, h3, dt, legend, .field > span, .prompt, .tag, .badge, .lock, summary, .phase, .divider, .pace, .waiting .status) {
+  font-family: var(--sans);
+  letter-spacing: 0.04em;
   font-size: 12px;
+}
+body[data-lang='zh'] .phase {
+  font-size: var(--t-sm);
+  font-weight: 600;
 }
 
 /* ------------------------------------------------------------------ */
@@ -137,7 +142,9 @@ body[data-phase='night'] .phase {
   color: var(--night);
 }
 body[data-phase='setup'] .phase,
-body[data-phase='setup'] #hull,
+body[data-phase='setup'] #hull {
+  display: none;
+}
 body[data-phase='setup'] #meta {
   visibility: hidden;
 }
@@ -250,9 +257,14 @@ textarea {
   border-radius: 0;
   padding: 8px 10px;
 }
-input[type='number'],
-select {
+input[type='number'] {
   font-family: var(--mono);
+}
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-width: 0;
 }
 input[type='range'],
 input[type='radio'] {
@@ -385,6 +397,9 @@ body[data-lang='zh'] .intro h1 {
   text-transform: none;
   letter-spacing: 0;
 }
+.field input[type='range'] {
+  margin-top: 8px;
+}
 .modes {
   gap: 4px;
 }
@@ -402,6 +417,18 @@ body[data-lang='zh'] .intro h1 {
   display: grid;
   grid-template-columns: 1fr 1.4fr;
   gap: 18px;
+}
+.pair .field {
+  align-content: start;
+}
+.field output {
+  display: block;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  margin-top: 2px;
+}
+.form {
+  min-width: 0;
 }
 #start {
   margin-top: 18px;
