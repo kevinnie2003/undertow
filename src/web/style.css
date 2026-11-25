@@ -334,6 +334,7 @@ textarea {
   max-width: 13ch;
 }
 body[data-lang='zh'] .intro h1 {
+  text-wrap: balance;
   line-height: 1.15;
   max-width: 11em;
   letter-spacing: 0.02em;
@@ -1147,11 +1148,7 @@ body[data-lang='zh'] .speech .text {
     max-height: 62vh;
     min-height: 40vh;
   }
-  .actions {
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
-  }
+
   .speech {
     grid-template-columns: 1fr;
     gap: 4px;

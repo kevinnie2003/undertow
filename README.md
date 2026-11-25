@@ -9,7 +9,13 @@ npm install
 npm run dev          # http://localhost:8787
 ```
 
-Everything runs offline by default. Without an API key, the AI seats use deterministic heuristic agents, or a mock model that drives the full LLM pipeline. Set `ANTHROPIC_API_KEY` (or an OpenAI-compatible endpoint) to seat real language models.
+Everything runs offline by default. Without an API key, the AI seats use deterministic heuristic agents, or a mock model that drives the full LLM pipeline. Set `ANTHROPIC_API_KEY` with `UNDERTOW_ANTHROPIC_MODEL` (or an OpenAI-compatible endpoint) to seat real language models.
+
+There is also a single-file build in [`docs/index.html`](docs/index.html) that runs the whole game in the browser with no server.
+
+**English and 简体中文.** The interface, the rules, the agents' speech and their private thoughts all follow the language switch in the top bar. You can switch mid-game: the screen re-renders, and every line spoken from then on is in the new language. Typed speech is parsed for claims in either language ("我昨晚探测了 Bram，回声是船员。我投 Jonah。" works as well as the English). Pick a language with `?lang=zh` or `?lang=en`; otherwise the browser's language decides.
+
+> **中文简介**：《暗流》是一款原创的社交推理游戏。你和几名 AI 船员驻守在海面以下 4,000 米的科考站 Meridian-9，其中有人已经被海沟里的东西替换。大家发言、诈唬、推理、投票。每个 AI 都有隐藏身份、私人记忆和对每个人的怀疑概率，必要时会说谎。可以亲自上场，也可以观看全 AI 对局并看到它们的内心。界面、规则和 AI 的发言都支持中英文切换。
 
 ---
 
@@ -226,6 +232,8 @@ The setups were tuned through several rounds of simulating, reading transcripts 
 - **Graceful degradation everywhere.** An agent that throws, times out or returns nonsense never breaks a game: the LLM agent falls back to its twin, and the match falls back to a safe action. This matters once a game depends on a network API.
 - **The model is not the referee.** The engine validates everything. An LLM cannot vote for a dead player, scan twice or invent players.
 - **Determinism.** A seed fixes roles, clues, persona casting and every heuristic choice, so any game can be replayed or turned into a regression test.
+- **Two languages, one game.** Language is a presentation concern. Agents read it at the moment they speak, and the Chinese voice templates consume exactly the same random draws as the English ones, so a seeded game plays out identically in both languages (there is a test for this). Model-backed agents are asked to write their speech, notes and reasoning in the chosen language while keeping JSON keys and tool names in English.
+- **An instrument panel, not a landing page.** The interface is styled like a station logbook: square corners, hairline rules, one sodium-lamp accent, seat numbers instead of avatars, and a fixed type scale. Faction colours are reserved for things that mean a faction.
 - **Small and dependency-light.** The only runtime dependency is the Anthropic SDK, and the server imports it only when Claude agents are enabled.
 
 ## Project layout
@@ -233,15 +241,17 @@ The setups were tuned through several rounds of simulating, reading transcripts 
 ```
 src/
   engine/      types, rng, roles and setups, claim validation, the Game state machine
-  agents/      memory, beliefs, personas, voice templates, heuristic agent, factory
+  agents/      memory, beliefs, personas, voice templates (en and zh), heuristic agent, factory
     llm/       provider interface, Anthropic and OpenAI-compatible providers, mock model,
                prompts, JSON parsing, the ReAct LLMAgent
   runner/      Match (drives a game), lineup (casting), GameSession (UI bridge)
   server/      HTTP + SSE game server
   sim/         simulation harness, report, transcripts, CLI
-  web/         index.html, style.css, UI, clients, replays, claim extraction from typed speech
+  i18n/        language type, Chinese role names, CJK and Latin spacing
+  web/         index.html, style.css, UI strings (en and zh), clients, replays, claim extraction
 test/          vitest suites (engine, agents, llm, session and server, replays, web UI)
 scripts/       esbuild build
+docs/          the single-file browser build
 ```
 
 ## What's next
