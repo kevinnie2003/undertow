@@ -35,7 +35,7 @@ describe('beliefs', () => {
     const crew = g.state.players.find((p) => factionOf(p.role) === 'crew')!.id;
     const b = beliefsFor(g, crew);
     const sum = [...b.p.values()].reduce((a, x) => a + x, 0);
-    expect(sum).toBeCloseTo(2, 5);
+    expect(sum).toBeCloseTo(3, 5);
     expect(b.p.get(crew)).toBe(0);
   });
 

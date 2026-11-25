@@ -354,6 +354,16 @@ export class HeuristicAgent implements Agent {
   }
 
   /** Crew player we'd most like to see airlocked: already suspected, or dangerous. */
+  /**
+   * How suspicious a frame target must look in public before an Undertow
+   * accuses them: the bar a crew player would use, so their accusations are
+   * no more frequent or reckless than crew ones.
+   */
+  private frameBar(ctx: Ctx): number {
+    const pubAvg = ctx.others.reduce((a, id) => a + ctx.pub.p.get(id)!, 0) / Math.max(1, ctx.others.length);
+    return Math.max(0.25, this.policy.accuseRatio * pubAvg);
+  }
+
   private frameTarget(ctx: Ctx, exclude: PlayerId[] = []): PlayerId | null {
     const team = new Set(this.team(ctx));
     const crew = ctx.others.filter((id) => !team.has(id) && !exclude.includes(id));
@@ -425,7 +435,7 @@ export class HeuristicAgent implements Agent {
     const doomed = partners.find((id) => ctx.pub.p.get(id)! > this.policy.bussAt);
     if (doomed && !lastWords) {
       claims.push({ type: 'accuse', target: doomed });
-    } else if (frame && ctx.pub.p.get(frame)! >= 0.2 * this.persona.aggression) {
+    } else if (frame && ctx.pub.p.get(frame)! >= this.frameBar(ctx)) {
       if (!m.claims.some((c) => c.round === round && c.speaker === this.id && c.claim.type === 'accuse' && c.claim.target === frame)) {
         claims.push({ type: 'accuse', target: frame });
       }

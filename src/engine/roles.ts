@@ -70,13 +70,13 @@ export function echoOf(role: RoleId): Faction {
 export function defaultSetup(playerCount: number): RoleId[] {
   switch (playerCount) {
     case 5:
-      return ['siren', 'sonar', 'medic', 'diver', 'diver'];
+      return ['siren', 'sonar', 'diver', 'diver', 'diver'];
     case 6:
-      return ['drowned', 'drowned', 'sonar', 'medic', 'diver', 'diver'];
+      return ['drowned', 'siren', 'sonar', 'medic', 'diver', 'diver'];
     case 7:
       return ['drowned', 'siren', 'sonar', 'medic', 'diver', 'diver', 'diver'];
     case 8:
-      return ['drowned', 'siren', 'sonar', 'medic', 'archivist', 'diver', 'diver', 'diver'];
+      return ['drowned', 'drowned', 'siren', 'sonar', 'medic', 'archivist', 'diver', 'diver'];
     case 9:
       return ['drowned', 'drowned', 'siren', 'sonar', 'medic', 'archivist', 'diver', 'diver', 'diver'];
     case 10:
@@ -88,7 +88,7 @@ export function defaultSetup(playerCount: number): RoleId[] {
 
 /** Chance each night that a living diver receives a station-log clue, by table size. */
 export function defaultClueChance(playerCount: number): number {
-  return ({ 7: 0.6, 8: 0.3, 10: 0.65 } as Record<number, number>)[playerCount] ?? 1;
+  return ({ 5: 1, 6: 0.4, 7: 0, 8: 0.8, 9: 0.1, 10: 0.1 } as Record<number, number>)[playerCount] ?? 1;
 }
 
 export function countSetup(roles: RoleId[]): Record<RoleId, number> {

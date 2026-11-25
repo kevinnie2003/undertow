@@ -38,6 +38,12 @@ export interface BeliefParams {
    * more likely to be a team framing a crew member than two crew guessing alike.
    */
   pileOnTeam: number;
+  /**
+   * Treat each accusation, vote intention and vote as a choice among the living:
+   * pushing someone who is likely crew then counts against the pusher, because a
+   * crew player would more often have pointed at an Undertow.
+   */
+  normaliseTargets: boolean;
 }
 
 export const DEFAULT_BELIEF_PARAMS: BeliefParams = {
@@ -55,6 +61,7 @@ export const DEFAULT_BELIEF_PARAMS: BeliefParams = {
   crewVoteHit: 1.15,
   roleSwitchCrew: 0.1,
   pileOnTeam: 1.8,
+  normaliseTargets: true,
 };
 
 export interface BeliefInput {
@@ -129,6 +136,36 @@ export function computeBeliefs(input: BeliefInput): BeliefResult {
   let aliveMask = 0;
   for (const id of alive) aliveMask |= bit(id);
   const livingCount = alive.size;
+  const allMask = (1 << n) - 1;
+  /** Who was alive to be pointed at during day `round` (after that night's drag). */
+  const aliveAtDay = (round: number) => {
+    let m = allMask;
+    for (const d of memory.deaths) if (d.round < round || (d.round === round && d.fate === 'dragged')) m &= ~bit(d.player);
+    return m;
+  };
+  const dayMasks = new Map<number, number>();
+  const dayMask = (round: number) => {
+    if (!dayMasks.has(round)) dayMasks.set(round, aliveAtDay(round));
+    return dayMasks.get(round)!;
+  };
+  /**
+   * Likelihood that `speaker` singled out `target` among the living on day
+   * `round`: crew weight Undertow targets by `crewHit`, Undertow weight their
+   * partners by `liarPartner`. Normalised over the alternatives and scaled by
+   * their count so factors stay near 1.
+   */
+  const targeting = (speaker: PlayerId, target: PlayerId, round: number, crewHit: number, liarPartner: number): Factor => {
+    const sb = bit(speaker);
+    const tb = bit(target);
+    if (!params.normaliseTargets) return (h) => (h & sb ? (h & tb ? liarPartner : 1) : h & tb ? crewHit : 1);
+    const others = dayMask(round) & ~sb;
+    const k = popcount(others);
+    return (h) => {
+      const u = popcount(h & others);
+      if (h & sb) return ((h & tb ? liarPartner : 1) * k) / (k - u + liarPartner * u);
+      return ((h & tb ? crewHit : 1) * k) / (k - u + crewHit * u);
+    };
+  };
 
   // --- Claims ----------------------------------------------------------------
   const claimRecords = memory.claims.filter((c) => !(priv && c.speaker === me));
@@ -213,8 +250,13 @@ export function computeBeliefs(input: BeliefInput): BeliefResult {
         break;
       }
       case 'accuse': {
+        soft.push(targeting(rec.speaker, c.target, rec.round, params.crewAccuseHit, params.liarAccusePartner));
+        break;
+      }
+      case 'protect': {
+        // A genuine Medic only reports saves, and the Undertow never drag their own.
         const tb = bit(c.target);
-        soft.push((h) => (h & sb ? (h & tb ? params.liarAccusePartner : 1) : h & tb ? params.crewAccuseHit : 1));
+        soft.push((h) => (h & sb ? (h & tb ? params.liarVouchPartner : 1) : h & tb ? params.eps : 1));
         break;
       }
       case 'vouch': {
@@ -224,8 +266,7 @@ export function computeBeliefs(input: BeliefInput): BeliefResult {
       }
       case 'intend_vote': {
         if (c.target === 'skip') break;
-        const tb = bit(c.target);
-        soft.push((h) => (h & sb ? (h & tb ? params.liarIntendPartner : 1) : h & tb ? params.crewIntendHit : 1));
+        soft.push(targeting(rec.speaker, c.target, rec.round, params.crewIntendHit, params.liarIntendPartner));
         break;
       }
       default:
@@ -270,9 +311,7 @@ export function computeBeliefs(input: BeliefInput): BeliefResult {
   for (const v of memory.votes) {
     for (const [voter, target] of Object.entries(v.votes)) {
       if (target === 'skip' || (priv && voter === me)) continue;
-      const vb = bit(voter);
-      const tb = bit(target);
-      soft.push((h) => (h & tb ? (h & vb ? params.partnerVote : params.crewVoteHit) : 1));
+      soft.push(targeting(voter, target, v.round, params.crewVoteHit, params.partnerVote));
     }
   }
 

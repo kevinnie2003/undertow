@@ -147,7 +147,7 @@ All agents implement one interface: `decide(observation) → Promise<Action>`. A
 `computeBeliefs` does exact Bayesian inference over every possible Undertow set. At ten players and three Undertow that is 120 hypotheses, held as bitmasks and enumerated with Gosper's hack. It takes well under a millisecond.
 
 - **Hard constraints** remove hypotheses outright. They come from the agent's own knowledge (its own role, partners, scans, reads and clues), from facts everyone knows (dragged players were crew), and from the fact that the game has not ended.
-- **Soft likelihoods** reweight the rest. Crew mostly tell the truth and the Undertow lie. Each claim type, and each vote, gets a likelihood under each hypothesis. Examples: a scan that contradicts the hypothesis is improbable unless the speaker is a liar. Two claimants to a role that exists once cannot both be genuine. Only one clue is dealt per night, so two clue claims for the same night include at least one lie. Two players who pile onto the same target with no evidence of their own look like a team.
+- **Soft likelihoods** reweight the rest. Crew mostly tell the truth and the Undertow lie. Each claim type, and each vote, gets a likelihood under each hypothesis. Examples: a scan that contradicts the hypothesis is improbable unless the speaker is a liar. Two claimants to a role that exists once cannot both be genuine. Only one clue is dealt per night, so two clue claims for the same night include at least one lie. Two players who pile onto the same target with no evidence of their own look like a team. An accusation, vote intention or vote is a choice among the living players, so pushing someone who is probably crew counts against the pusher. A reported Medic save clears the saved player if the Medic is genuine.
 - **Two perspectives.** A *private* posterior uses everything the seat knows. A *public* posterior uses only what everyone saw. The Undertow use the public one to model what the crew believe: whom they can frame, and when a partner is beyond saving.
 
 If the evidence contradicts itself, for example because someone lied in a way that clashes with the agent's own clue, the model relaxes the clue constraints and reports `consistent: false`. It never crashes.
@@ -157,7 +157,7 @@ If the evidence contradicts itself, for example because someone lied in a way th
 `HeuristicAgent` turns beliefs into play through a small policy with persona dials for aggression, boldness and openness.
 
 - **Crew** reveal information when it pays off. A sonar comes out with a hit, under a counter-claim, under pressure, or after a couple of days. A medic stays hidden unless a save or a counter-claim makes revealing worth it. Crew accuse their top suspect when it stands clearly above the average, vouch for players they know are clean, announce an intended vote, and lean slightly toward the table's vote intentions. They skip only when the evidence is flat and there is hull to spare.
-- **Undertow** build a cover story. One member of the team may fake the sonar role, with invented scans that frame dangerous crew and clear partners. Some fake a clue, but only for a night nobody has claimed yet. They frame whichever crew member the public already suspects, stagger their accusations so they don't pile on together, drag the biggest threat at night, split votes away from a partner who is under pressure, and abandon a partner who is clearly lost.
+- **Undertow** build a cover story. One member of the team may fake the sonar role, with invented scans that frame dangerous crew and clear partners. Some fake a clue, but only for a night nobody has claimed yet. They frame whichever crew member the public already suspects, accuse only when a crew player in their seat would, stagger their accusations so they don't pile on together, drag the biggest threat at night, split votes away from a partner who is under pressure, and abandon a partner who is clearly lost.
 
 Speech is produced from the claims through persona voice templates, so text and claims always agree.
 
@@ -186,12 +186,12 @@ Providers implement one method, `complete({system, messages, maxTokens})`:
 
 | Players | Setup | Clue chance | Crew win | Avg rounds | Airlock accuracy (day 1) |
 |---|---|---|---|---|---|
-| 5 | siren · sonar, medic, 2 divers | 100% | 53.8% | 2.1 | 32.5% (21.4%) |
-| 6 | 2 drowned · sonar, medic, 2 divers | 100% | 50.7% | 2.3 | 64.2% (46.3%) |
-| 7 | drowned, siren · sonar, medic, 3 divers | 60% | 50.2% | 2.7 | 48.0% (31.2%) |
-| 8 | drowned, siren · sonar, medic, archivist, 3 divers | 30% | 52.1% | 3.2 | 43.8% (23.1%) |
-| 9 | 2 drowned, siren · sonar, medic, archivist, 3 divers | 100% | 53.3% | 3.4 | 62.2% (38.0%) |
-| 10 | 2 drowned, siren · sonar, medic, archivist, 4 divers | 65% | 52.1% | 3.9 | 55.9% (33.0%) |
+| 5 | siren · sonar, 3 divers | 100% | 54.4% | 1.9 | 40.1% (35.0%) |
+| 6 | drowned, siren · sonar, medic, 2 divers | 40% | 53.0% | 2.7 | 68.4% (56.9%) |
+| 7 | drowned, siren · sonar, medic, 3 divers | 0% | 52.4% | 2.9 | 53.6% (30.2%) |
+| 8 | 2 drowned, siren · sonar, medic, archivist, 2 divers | 80% | 51.1% | 3.2 | 71.4% (48.2%) |
+| 9 | 2 drowned, siren · sonar, medic, archivist, 3 divers | 10% | 50.5% | 3.6 | 61.1% (41.2%) |
+| 10 | 2 drowned, siren · sonar, medic, archivist, 4 divers | 10% | 52.6% | 4.0 | 57.1% (32.6%) |
 
 The report also tracks outcomes by reason, days without an airlock, medic saves, how often the sonar role was faked, fake clues, sonar survival to day 2, and controller errors (zero across all of these runs). A full 6,000-game sweep takes about a minute.
 
@@ -203,6 +203,7 @@ The setups were tuned through several rounds of simulating, reading transcripts 
 2. **Fake clues.** Transcripts showed Undertow inventing clues that the crew could not check, and day-one airlock accuracy fell *below chance* (16% at six players, against a 33% base rate). The belief model then learned that only one clue is dealt per night, which makes the real holder certain the second claimant is lying. Crew accuracy jumped, and the Undertow policy adapted: it now fakes only a clue for a night nobody has claimed yet.
 3. **Bandwagons.** The next weakness was two Undertow accusing the same crew member with no evidence, after which the crew followed the crowd. A pile-on likelihood now treats a pair of evidence-free co-accusers as a likely team. The Undertow responded by staggering their accusations.
 4. **Setups.** With both sides playing better, the crew won 85–93% of games at some table sizes. Per-size role lists and clue rates bring every size to 50–54%. Clues turned out to be the strongest lever, and the siren the second strongest.
+5. **Pointing at the crew.** Accusations, vote intentions and votes used to count only when they hit an Undertow, so an Undertow could accuse a player the table knew was crew for free. They are now modelled as a choice among the living, which makes pushing a likely-crew player evidence against the pusher. A Medic's reported save also clears the saved player, since the Undertow never drag their own. Crew win rates jumped to 63–79%. The Undertow adapted by accusing only when a crew player would, and the setups were retuned: fewer clues at most sizes, a third Undertow at eight players, and no Medic at five.
 
 ## Testing
 

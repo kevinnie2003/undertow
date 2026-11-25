@@ -273,7 +273,7 @@ describe('claims', () => {
 describe('balance defaults', () => {
   it('uses a per-size clue rate unless configured', () => {
     expect(Game.create({ seed: 1, names: NAMES.slice(0, 8) }).state.config.clueChance).toBeLessThan(1);
-    expect(Game.create({ seed: 1, names: NAMES.slice(0, 6) }).state.config.clueChance).toBe(1);
+    expect(Game.create({ seed: 1, names: NAMES.slice(0, 5) }).state.config.clueChance).toBe(1);
     expect(Game.create({ seed: 1, names: NAMES.slice(0, 8), config: { clueChance: 1 } }).state.config.clueChance).toBe(1);
   });
 });
