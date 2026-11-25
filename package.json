@@ -1,0 +1,25 @@
+{
+  "name": "undertow",
+  "version": "0.1.0",
+  "description": "Undertow: an original social deduction game where you play alongside LLM agents on a sinking deep-sea station.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "sim": "node scripts/build.mjs --node-only && node dist/sim.js",
+    "start": "node scripts/build.mjs && node dist/server.js",
+    "dev": "node scripts/build.mjs && node dist/server.js"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.6.10",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.1"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.14.0"
+  }
+}
