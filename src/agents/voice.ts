@@ -65,7 +65,7 @@ const EN: Pack = {
     nervous: ["I don't know anything, I swear.", "I've got nothing, sorry.", 'Can someone else go first next time?'],
     dry: ['Nothing to add. Shocking, I know.', "I'll save my brilliance for later.", 'No news from my corner of the station.'],
   },
-  last: ['Before I go:', 'Last thing from me:', 'For the record:'],
+  last: ['Before I go, one thing.', 'Last thing from me.', 'For the record.'],
   defend: ['I am not Undertow.', 'You have the wrong person.', "Stop looking at me, I'm crew."],
   join: ' ',
   sentence(c, voice, name, rng) {

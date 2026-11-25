@@ -317,7 +317,7 @@ const ZH: Strings = {
   latestThought: '最新想法',
   privateNotes: '私人笔记',
   trace: 'ReAct 轨迹',
-  traceSummary: (round, kind, fell) => `第 ${round} 天 · ${kind}${fell ? ' · 退回规则型' : ''}`,
+  traceSummary: (round, kind, fell) => `第 ${round} 天 · ${({ speak: '发言', vote: '投票', night: '夜间行动', last_words: '遗言' } as Record<string, string>)[kind] ?? kind}${fell ? ' · 退回规则型' : ''}`,
   invalid: '无效',
   yourRole: '你的身份',
   fellowList: (names) => `暗流同伴：${names}`,

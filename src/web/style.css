@@ -1110,15 +1110,41 @@ body[data-lang='zh'] .speech .text {
   .meta {
     display: none;
   }
+  /* One page scroll on phones: no nested scrolling panes except the log. */
   .game {
     grid-template-columns: 1fr;
+    flex: none;
+    height: auto;
+  }
+  .roster-col,
+  .side {
+    overflow: visible;
   }
   .roster-col {
     border-right: 0;
+    border-bottom: 1px solid var(--rule);
   }
+  /* The manifest becomes a strip you swipe sideways. */
   .roster {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(168px, 46%);
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+  .roster .card {
+    scroll-snap-align: start;
+    border-right: 1px solid var(--rule);
+    border-bottom: 0;
+  }
+  .log {
+    max-height: 62vh;
+    min-height: 40vh;
+  }
+  .actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
   }
   .speech {
     grid-template-columns: 1fr;
