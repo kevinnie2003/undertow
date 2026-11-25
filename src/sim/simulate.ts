@@ -4,6 +4,9 @@ import type { PolicyParams } from '../agents/heuristic.js';
 import type { Agent } from '../agents/types.js';
 import type { Persona } from '../agents/personas.js';
 import { createLineup } from '../runner/lineup.js';
+import { makeAgentFactory, type AgentKind } from '../agents/factory.js';
+import { FactionSplitAgent } from '../agents/factionSplit.js';
+import { UsageMeter, type LLMProvider } from '../agents/llm/provider.js';
 import { Match } from '../runner/match.js';
 
 export interface GameSummary {
@@ -28,17 +31,55 @@ export interface SimOptions {
   seed: number;
   config?: Partial<GameConfig>;
   policy?: Partial<PolicyParams>;
-  /** Policy override for Undertow seats only, to test one side's changes. */
+  /** Custom controller per seat. Takes precedence over crew/undertow kinds. */
   makeAgent?: (id: PlayerId, persona: Persona, seat: number, gameSeed: number) => Agent;
+  /** Agent kind for crew seats and for Undertow seats (default heuristic for both). */
+  crew?: AgentKind;
+  undertow?: AgentKind;
+  /** Shared provider for real LLM kinds. */
+  provider?: () => LLMProvider;
+  /** Games played at once (useful when agents wait on a network model). */
+  concurrency?: number;
 }
 
-export async function simulateOne(seed: number, opts: Omit<SimOptions, 'games' | 'seed'>): Promise<GameSummary> {
+/** Running LLM statistics across a simulation. */
+export interface LLMStats {
+  meter: UsageMeter;
+  decisions: number;
+  fallbacks: number;
+  steps: number;
+}
+
+function kindMaker(opts: Omit<SimOptions, 'games' | 'seed'>, stats: LLMStats) {
+  if (opts.makeAgent || (!opts.crew && !opts.undertow)) return opts.makeAgent;
+  let provider: LLMProvider | null = null;
+  const shared = opts.provider ? () => (provider ??= opts.provider!()) : undefined;
+  return (id: PlayerId, persona: Persona, seat: number, gameSeed: number): Agent => {
+    const factory = (kind: AgentKind) =>
+      makeAgentFactory({
+        kind,
+        seed: gameSeed,
+        policy: opts.policy,
+        meter: stats.meter,
+        provider: shared,
+        onTrace: (t) => {
+          stats.decisions++;
+          stats.steps += t.steps.length;
+          if (t.fallback) stats.fallbacks++;
+        },
+      })(id, persona, seat);
+    return new FactionSplitAgent(id, () => factory(opts.crew ?? 'heuristic'), () => factory(opts.undertow ?? 'heuristic'));
+  };
+}
+
+export async function simulateOne(seed: number, opts: Omit<SimOptions, 'games' | 'seed'>, stats: LLMStats = newStats()): Promise<GameSummary> {
+  const make = kindMaker(opts, stats);
   const { game, agents } = createLineup({
     players: opts.players,
     seed,
     config: opts.config,
     policy: opts.policy,
-    makeAgent: opts.makeAgent ? (id, persona, seat) => opts.makeAgent!(id, persona, seat, seed) : undefined,
+    makeAgent: make ? (id, persona, seat) => make(id, persona, seat, seed) : undefined,
   });
   let errors = 0;
   const match = new Match(game, agents, { onError: () => errors++ });
@@ -124,12 +165,38 @@ export interface SimReport {
   fakeCluesPerGame: number;
   sonarSurvivalDay2: number;
   errors: number;
+  llm?: { decisions: number; fallbackRate: number; stepsPerDecision: number; calls: number; inputTokens: number; outputTokens: number };
+  matchup?: string;
+}
+
+function newStats(): LLMStats {
+  return { meter: new UsageMeter(), decisions: 0, fallbacks: 0, steps: 0 };
 }
 
 export async function simulate(opts: SimOptions): Promise<{ report: SimReport; games: GameSummary[] }> {
-  const games: GameSummary[] = [];
-  for (let i = 0; i < opts.games; i++) games.push(await simulateOne(opts.seed + i, opts));
-  return { report: aggregate(games, opts.players), games };
+  const stats = newStats();
+  const games: GameSummary[] = new Array(opts.games);
+  let next = 0;
+  const worker = async () => {
+    while (next < opts.games) {
+      const i = next++;
+      games[i] = await simulateOne(opts.seed + i, opts, stats);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(opts.concurrency ?? 1, opts.games)) }, worker));
+  const report = aggregate(games, opts.players);
+  if (opts.crew || opts.undertow) report.matchup = `crew: ${opts.crew ?? 'heuristic'} vs undertow: ${opts.undertow ?? 'heuristic'}`;
+  if (stats.decisions > 0) {
+    report.llm = {
+      decisions: stats.decisions,
+      fallbackRate: stats.fallbacks / stats.decisions,
+      stepsPerDecision: stats.steps / stats.decisions,
+      calls: stats.meter.calls,
+      inputTokens: stats.meter.inputTokens,
+      outputTokens: stats.meter.outputTokens,
+    };
+  }
+  return { report, games };
 }
 
 export function aggregate(games: GameSummary[], players: number): SimReport {
@@ -171,5 +238,12 @@ export function formatReport(r: SimReport): string {
     `  sonar alive on day 2   ${pct(r.sonarSurvivalDay2)}`,
     `  controller errors      ${r.errors}`,
   ];
+  if (r.matchup) lines.splice(1, 0, `  matchup                ${r.matchup}`);
+  if (r.llm) {
+    lines.push(
+      `  LLM decisions          ${r.llm.decisions} (fallback ${pct(r.llm.fallbackRate)}, ${r.llm.stepsPerDecision.toFixed(2)} steps each)`,
+      `  LLM calls / tokens     ${r.llm.calls} calls, ${r.llm.inputTokens} in, ${r.llm.outputTokens} out`,
+    );
+  }
   return lines.join('\n');
 }

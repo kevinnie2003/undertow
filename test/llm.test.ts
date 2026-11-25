@@ -141,3 +141,14 @@ describe('LLMAgent', () => {
     expect(() => makeAgentFactory({ kind: 'anthropic', seed: 1 })('p0', PERSONAS[0], 0)).toThrow();
   });
 });
+
+describe('matchups', () => {
+  it('pits agent kinds against each other by faction and reports LLM usage', async () => {
+    const { simulate } = await import('../src/sim/simulate.js');
+    const { report } = await simulate({ games: 4, players: 6, seed: 3, crew: 'mock-llm', undertow: 'heuristic', concurrency: 2 });
+    expect(report.matchup).toBe('crew: mock-llm vs undertow: heuristic');
+    expect(report.errors).toBe(0);
+    expect(report.llm!.decisions).toBeGreaterThan(20);
+    expect(report.llm!.fallbackRate).toBe(0);
+  });
+});

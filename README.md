@@ -71,6 +71,15 @@ Requires Node 20 or newer.
 | `npm run sim -- --all --games 1000` | Runs agent-only games at every table size and prints statistics. |
 | `npm run sim -- --players 7 --seed 3 --transcript` | Prints one full game, with roles and every private event. |
 
+To pit agent kinds against each other, give each faction its own kind:
+
+```
+npm run sim -- --players 7 --games 50 --crew anthropic --undertow heuristic
+npm run sim -- --players 7 --games 50 --crew heuristic --undertow openai --concurrency 8
+```
+
+The report then adds the LLM's decision count, its fallback rate, steps per decision, calls and tokens. As a rough guide, the mock model's prompts come to about 2,400 input tokens per decision, or about 90,000 per seven-player game when every seat is a model.
+
 More simulator flags: `--roles drowned,siren,sonar,...` for a custom setup, `--hull N`, `--rounds N` (discussion rounds), `--clue 0.5` (clue chance), `--reveal` (reveal faction on airlock), `--policy skipRatio=1.5,coordination=0.5` to override agent policy, and `--json sim-results/out.json`.
 
 The built `dist/web` folder also works as a static site without the server. In that case the whole game, agents included, runs in the browser.
@@ -197,12 +206,12 @@ The setups were tuned through several rounds of simulating, reading transcripts 
 
 ## Testing
 
-`npm test` runs 55 tests in about 5 seconds.
+`npm test` runs 56 tests in about 5 seconds.
 
 - **Engine:** setup and determinism, the calm first night, drags and medic saves, the medic's no-repeat rule, siren echoes, clue invariants, archivist reads, discussion order, strict-plurality votes, ties and skips, hull breach, parity, round limit, last words, faction reveal, input validation, speech sanitising, serialize and resume, event redaction, and claim validation.
 - **Beliefs:** exact enumeration, posteriors that sum to the Undertow count, private versus public knowledge, hard facts from scans and drags, and the one-clue-per-night rule.
 - **Heuristic agents:** 90 games across every table size with no illegal actions, determinism, a sonar acting on a hit, and a sane simulation report.
-- **LLM agent:** JSON extraction, tool use and name resolution, repair of malformed and illegal output, fallback after repeated bad steps, retry on retryable errors and fallback on fatal ones, claim validation, prompt contents, full noisy mock-LLM games, and the agent factory.
+- **LLM agent:** JSON extraction, tool use and name resolution, repair of malformed and illegal output, fallback after repeated bad steps, retry on retryable errors and fallback on fatal ones, claim validation, prompt contents, full noisy mock-LLM games, the agent factory, and faction-vs-faction matchups.
 - **Session and server:** a human seat (waiting, redaction, reveal at the end), rejection of invalid human actions, spectator insights, claim extraction from typed text, and a complete game played over HTTP and SSE with token checks and a path traversal probe.
 - **Web client:** the real UI in jsdom. One test watches a full game and opens an agent's mind panel. Another plays every decision through the buttons and the speech box.
 
@@ -233,7 +242,7 @@ scripts/       esbuild build
 
 ## What's next
 
-- Run tournaments of LLM agents against heuristic agents (and model against model) through the simulator, and report win rates and deception statistics per model.
+- Publish tournament results for real models (the `--crew` and `--undertow` flags are ready; this environment has no API key).
 - Add a learned or tuned policy: fit the belief likelihoods and policy dials to simulated play instead of setting them by hand.
 - Add replays: save serialized games and step through them in the spectator view.
 - Add sound and a little more motion in the UI, such as the hull creaking and the lights dimming at night.
