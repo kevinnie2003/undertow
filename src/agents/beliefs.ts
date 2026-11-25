@@ -33,6 +33,11 @@ export interface BeliefParams {
   crewVoteHit: number;
   /** Crew who change their role claim. */
   roleSwitchCrew: number;
+  /**
+   * Two players who pile on the same target without evidence of their own are
+   * more likely to be a team framing a crew member than two crew guessing alike.
+   */
+  pileOnTeam: number;
 }
 
 export const DEFAULT_BELIEF_PARAMS: BeliefParams = {
@@ -49,6 +54,7 @@ export const DEFAULT_BELIEF_PARAMS: BeliefParams = {
   partnerVote: 0.4,
   crewVoteHit: 1.15,
   roleSwitchCrew: 0.1,
+  pileOnTeam: 1.8,
 };
 
 export interface BeliefInput {
@@ -161,6 +167,24 @@ export function computeBeliefs(input: BeliefInput): BeliefResult {
     });
   }
 
+  // Exactly one clue is dealt per night, so at most one clue claim per night is genuine.
+  const clueClaimants = new Map<number, Set<PlayerId>>();
+  for (const rec of claimRecords) {
+    if (rec.claim.type !== 'clue') continue;
+    if (!clueClaimants.has(rec.claim.round)) clueClaimants.set(rec.claim.round, new Set());
+    clueClaimants.get(rec.claim.round)!.add(rec.speaker);
+  }
+  for (const [night, speakers] of clueClaimants) {
+    const mine = priv && memory.clues.some((c) => c.round === night) ? 1 : 0;
+    if (speakers.size + mine <= 1) continue;
+    const bits = [...speakers].map(bit);
+    soft.push((h) => {
+      let genuine = mine;
+      for (const b of bits) if (!(h & b)) genuine++;
+      return genuine > 1 ? Math.pow(params.eps, genuine - 1) : 1;
+    });
+  }
+
   for (const rec of claimRecords) {
     const sb = bit(rec.speaker);
     const c = rec.claim;
@@ -207,6 +231,39 @@ export function computeBeliefs(input: BeliefInput): BeliefResult {
       default:
         break;
     }
+  }
+
+  // --- Pile-ons ---------------------------------------------------------------
+  // For each day, who pushed which target (accuse or intend) without having
+  // offered evidence of their own about that target.
+  const evidenceAbout = (speaker: PlayerId, target: PlayerId) =>
+    claimRecords.some(
+      (r) =>
+        r.speaker === speaker &&
+        ((r.claim.type === 'scan' && r.claim.target === target) ||
+          (r.claim.type === 'read' && r.claim.target === target) ||
+          (r.claim.type === 'clue' && r.claim.suspects.includes(target))),
+    );
+  const pushers = new Map<string, Set<PlayerId>>();
+  for (const rec of claimRecords) {
+    const c = rec.claim;
+    if (rec.lastWords || (c.type !== 'accuse' && c.type !== 'intend_vote') || c.target === 'skip') continue;
+    if (evidenceAbout(rec.speaker, c.target)) continue;
+    const key = `${rec.round}:${c.target}`;
+    if (!pushers.has(key)) pushers.set(key, new Set());
+    pushers.get(key)!.add(rec.speaker);
+  }
+  for (const [key, set] of pushers) {
+    if (set.size < 2) continue;
+    const target = key.slice(key.indexOf(':') + 1);
+    const tb = bit(target);
+    const ids = [...set].map(bit);
+    soft.push((h) => {
+      if (h & tb) return 1;
+      let team = 0;
+      for (const b of ids) if (h & b) team++;
+      return team >= 2 ? params.pileOnTeam : 1;
+    });
   }
 
   // --- Votes -----------------------------------------------------------------

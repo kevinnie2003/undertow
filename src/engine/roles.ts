@@ -60,14 +60,21 @@ export function echoOf(role: RoleId): Faction {
 }
 
 /** Default role setup per player count. Tuned with the simulation harness. */
+/**
+ * Default role lists, tuned with the simulation harness so that heuristic crews
+ * and heuristic Undertow win roughly equally often at every table size (see the
+ * README for the numbers). The siren and the station-log clue rate are the main
+ * balance levers: a siren blinds the sonar, and clues are the crew's best
+ * evidence.
+ */
 export function defaultSetup(playerCount: number): RoleId[] {
   switch (playerCount) {
     case 5:
-      return ['drowned', 'sonar', 'medic', 'diver', 'diver'];
+      return ['siren', 'sonar', 'medic', 'diver', 'diver'];
     case 6:
-      return ['drowned', 'siren', 'sonar', 'medic', 'diver', 'diver'];
+      return ['drowned', 'drowned', 'sonar', 'medic', 'diver', 'diver'];
     case 7:
-      return ['drowned', 'drowned', 'sonar', 'medic', 'archivist', 'diver', 'diver'];
+      return ['drowned', 'siren', 'sonar', 'medic', 'diver', 'diver', 'diver'];
     case 8:
       return ['drowned', 'siren', 'sonar', 'medic', 'archivist', 'diver', 'diver', 'diver'];
     case 9:
@@ -77,6 +84,11 @@ export function defaultSetup(playerCount: number): RoleId[] {
     default:
       throw new Error(`Undertow supports 5 to 10 players, got ${playerCount}`);
   }
+}
+
+/** Chance each night that a living diver receives a station-log clue, by table size. */
+export function defaultClueChance(playerCount: number): number {
+  return ({ 7: 0.6, 8: 0.3, 10: 0.65 } as Record<number, number>)[playerCount] ?? 1;
 }
 
 export function countSetup(roles: RoleId[]): Record<RoleId, number> {

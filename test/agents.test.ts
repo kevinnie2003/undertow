@@ -113,3 +113,23 @@ describe('heuristic agents', () => {
     expect(report.crewWinRate).toBeLessThan(0.95);
   });
 });
+
+describe('beliefs: one clue per night', () => {
+  it('the real clue holder knows a second clue claim for the same night is a lie', () => {
+    const g = makeGame(['drowned', 'drowned', 'sonar', 'medic', 'diver', 'diver'], { clueChance: 1 });
+    step(g);
+    const clue = g.state.events.find((e) => e.data.type === 'clue')!;
+    if (clue.data.type !== 'clue') throw new Error();
+    const holder = clue.data.player;
+    const faker = idOf(g, 'drowned');
+    // The holder shares the real clue, a drowned claims a different one for the same night.
+    const speak = (id: string, claims: unknown[]) => {
+      while (g.pendingRequests()[0]?.playerId !== id) step(g);
+      g.submit(id, { kind: 'speak', speech: { text: '...', claims: claims as never } });
+    };
+    const others = g.living().filter((p) => p.id !== faker && p.id !== holder).map((p) => p.id);
+    speak(holder, [{ type: 'clue', round: 1, suspects: clue.data.suspects }]);
+    speak(faker, [{ type: 'clue', round: 1, suspects: others.slice(0, 3) }]);
+    expect(beliefsFor(g, holder).p.get(faker)!).toBeGreaterThan(0.9);
+  });
+});

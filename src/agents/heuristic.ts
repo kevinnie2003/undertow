@@ -30,7 +30,7 @@ export const DEFAULT_POLICY: PolicyParams = {
   accuseRatio: 1.3,
   bussAt: 0.8,
   deception: 0.7,
-  fakeClue: 0.35,
+  fakeClue: 0.15,
 };
 
 export interface HeuristicOptions {
@@ -360,7 +360,16 @@ export class HeuristicAgent implements Agent {
     const round = ctx.obs.round;
     const team = new Set(this.team(ctx));
     const partners = ctx.obs.partners.filter((id) => ctx.alive.includes(id));
-    const frame = this.frameTarget(ctx);
+    // Two of us piling onto the same crew member with nothing to show for it
+    // reads as a team, so leave a target to the partner who is already on it
+    // unless crew have joined in.
+    const pushers = (target: PlayerId) =>
+      m.claims.filter((c) => c.round === round && !c.lastWords && (c.claim.type === 'accuse' || c.claim.type === 'intend_vote') && c.claim.target === target).map((c) => c.speaker);
+    const partnerOnly = ctx.others.filter((id) => {
+      const who = pushers(id).filter((sp) => sp !== this.id);
+      return who.length > 0 && who.every((sp) => team.has(sp));
+    });
+    const frame = this.frameTarget(ctx, partnerOnly) ?? this.frameTarget(ctx);
 
     // Is a sonar claimant hurting us? Then counter-claim the role (or claim when cornered).
     const realSonarAttack = this.othersClaiming('sonar').some((id) =>
@@ -388,7 +397,14 @@ export class HeuristicAgent implements Agent {
         if (!m.saidBefore((c) => c.type === 'scan' && c.round === s.round)) claims.push({ type: 'scan', ...s });
       }
       this.cover.revealed = true;
-    } else if (!this.cover.role && round >= 1 && !m.saidBefore((c) => c.type === 'clue' && c.round === round) && this.rng.next() < this.policy.fakeClue && frame) {
+    } else if (
+      !this.cover.role &&
+      round >= 1 &&
+      // Only one clue is dealt each night: never contradict one already on the table.
+      !m.claims.some((c) => c.claim.type === 'clue' && c.claim.round === round) &&
+      this.rng.next() < this.policy.fakeClue &&
+      frame
+    ) {
       // Pose as a diver with a planted station-log clue around a crew target.
       const pool = ctx.others.filter((id) => id !== frame && !team.has(id));
       const extra = this.rng.shuffle(pool).slice(0, 1);

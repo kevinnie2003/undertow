@@ -95,7 +95,7 @@ describe('night', () => {
 
   it('deals a private clue to a diver that names at least one undertow', () => {
     for (let seed = 1; seed < 30; seed++) {
-      const g = makeGame(['drowned', 'sonar', 'medic', 'diver', 'diver', 'diver', 'archivist'], {}, seed);
+      const g = makeGame(['drowned', 'sonar', 'medic', 'diver', 'diver', 'diver', 'archivist'], { clueChance: 1 }, seed);
       step(g);
       const clue = eventsOf(g, 'clue')[0];
       if (clue.data.type !== 'clue') throw new Error();
@@ -267,5 +267,13 @@ describe('claims', () => {
   it('dedupes', () => {
     const c = cleanClaims([{ type: 'accuse', target: 'p1' }, { type: 'accuse', target: 'p1' }], ids, 'p0');
     expect(c).toHaveLength(1);
+  });
+});
+
+describe('balance defaults', () => {
+  it('uses a per-size clue rate unless configured', () => {
+    expect(Game.create({ seed: 1, names: NAMES.slice(0, 8) }).state.config.clueChance).toBeLessThan(1);
+    expect(Game.create({ seed: 1, names: NAMES.slice(0, 6) }).state.config.clueChance).toBe(1);
+    expect(Game.create({ seed: 1, names: NAMES.slice(0, 8), config: { clueChance: 1 } }).state.config.clueChance).toBe(1);
   });
 });

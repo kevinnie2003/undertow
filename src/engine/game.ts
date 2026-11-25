@@ -1,6 +1,6 @@
 import { cleanClaims } from './claims.js';
 import { Rng } from './rng.js';
-import { countSetup, defaultSetup, echoOf, factionOf, ROLES } from './roles.js';
+import { countSetup, defaultClueChance, defaultSetup, echoOf, factionOf, ROLES } from './roles.js';
 import type {
   Action,
   DecisionRequest,
@@ -46,7 +46,7 @@ export class Game {
   }
 
   static create(opts: CreateGameOptions): Game {
-    const config: GameConfig = { ...DEFAULT_CONFIG, ...opts.config };
+    const config: GameConfig = { ...DEFAULT_CONFIG, clueChance: defaultClueChance(opts.names.length), ...opts.config };
     const n = opts.names.length;
     const roles = config.roles ?? defaultSetup(n);
     if (roles.length !== n) throw new GameError(`role list has ${roles.length} roles for ${n} players`);
