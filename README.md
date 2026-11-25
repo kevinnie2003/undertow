@@ -92,8 +92,8 @@ The server offers a model-backed agent kind when its environment is configured:
 
 | Variable | Meaning |
 |---|---|
-| `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN`) | Enables Claude agents. |
-| `UNDERTOW_ANTHROPIC_MODEL` | Model id, default `claude-opus-5-5`. |
+| `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN`) | Enables Claude agents, together with the model id below. |
+| `UNDERTOW_ANTHROPIC_MODEL` | The Claude model id to seat. Required for Claude agents. |
 | `UNDERTOW_ANTHROPIC_EFFORT` | `low`, `medium` or `high` (default `low`, which keeps turns quick and cheap). |
 | `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL` | Any OpenAI-compatible chat completions endpoint (OpenAI, a local vLLM or Ollama server, and so on). |
 | `UNDERTOW_MAX_GAMES` | How many games the server hosts at once (default 20). |

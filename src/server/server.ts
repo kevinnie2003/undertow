@@ -27,7 +27,7 @@ const games = new Map<string, Hosted>();
 
 export function availableKinds(): AgentKind[] {
   const kinds: AgentKind[] = ['heuristic', 'mock-llm'];
-  if (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN) kinds.push('anthropic');
+  if ((process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN) && process.env.UNDERTOW_ANTHROPIC_MODEL) kinds.push('anthropic');
   if (process.env.OPENAI_MODEL) kinds.push('openai');
   return kinds;
 }
