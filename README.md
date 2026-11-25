@@ -82,7 +82,9 @@ The report then adds the LLM's decision count, its fallback rate, steps per deci
 
 More simulator flags: `--roles drowned,siren,sonar,...` for a custom setup, `--hull N`, `--rounds N` (discussion rounds), `--clue 0.5` (clue chance), `--reveal` (reveal faction on airlock), `--policy skipRatio=1.5,coordination=0.5` to override agent policy, and `--json sim-results/out.json`.
 
-The built `dist/web` folder also works as a static site without the server. In that case the whole game, agents included, runs in the browser.
+The built `dist/web` folder also works as a static site without the server. In that case the whole game, agents included, runs in the browser. The build also writes `dist/undertow.html`, the same client in one self-contained file.
+
+**Replays.** When a game ends, **Save replay** downloads it as JSON and **Copy replay** puts it on the clipboard. Open either from **Watch a replay** on the start screen to step through the game with every role, private action and (for watched games) agent mind visible: step a line at a time, jump a phase, scrub, or play it back at any pace. A replay stores each event once and a small frame per moment, so a seven-player game comes to about 100 KB.
 
 ### LLM agents
 
@@ -132,7 +134,7 @@ Callers ask `pendingRequests()` which decisions are open, collect them and pass 
 
 **Server (`src/server`).** A dependency-free Node `http` server. Each game gets a random id and a separate random token. The token is required for the event stream and for actions, so nobody can watch or act in someone else's game. Views stream over server-sent events. Bodies are size-capped, static paths are normalised, and games expire after two hours.
 
-**Client (`src/web`).** Vanilla TypeScript and DOM, bundled with esbuild into one file of about 70 KB. It works against the server or fully offline in the browser.
+**Client (`src/web`).** Vanilla TypeScript and DOM, bundled with esbuild into one file of about 80 KB. It works against the server or fully offline in the browser.
 
 ## The agents
 
@@ -207,14 +209,15 @@ The setups were tuned through several rounds of simulating, reading transcripts 
 
 ## Testing
 
-`npm test` runs 56 tests in about 5 seconds.
+`npm test` runs 64 tests in about 6 seconds.
 
 - **Engine:** setup and determinism, the calm first night, drags and medic saves, the medic's no-repeat rule, siren echoes, clue invariants, archivist reads, discussion order, strict-plurality votes, ties and skips, hull breach, parity, round limit, last words, faction reveal, input validation, speech sanitising, serialize and resume, event redaction, and claim validation.
-- **Beliefs:** exact enumeration, posteriors that sum to the Undertow count, private versus public knowledge, hard facts from scans and drags, and the one-clue-per-night rule.
+- **Beliefs:** exact enumeration, posteriors that sum to the Undertow count, private versus public knowledge, hard facts from scans and drags, the one-clue-per-night rule, targeting as a choice among the living, and reported Medic saves.
 - **Heuristic agents:** 90 games across every table size with no illegal actions, determinism, a sonar acting on a hit, and a sane simulation report.
 - **LLM agent:** JSON extraction, tool use and name resolution, repair of malformed and illegal output, fallback after repeated bad steps, retry on retryable errors and fallback on fatal ones, claim validation, prompt contents, full noisy mock-LLM games, the agent factory, and faction-vs-faction matchups.
 - **Session and server:** a human seat (waiting, redaction, reveal at the end), rejection of invalid human actions, spectator insights, claim extraction from typed text, and a complete game played over HTTP and SSE with token checks and a path traversal probe.
-- **Web client:** the real UI in jsdom. One test watches a full game and opens an agent's mind panel. Another plays every decision through the buttons and the speech box.
+- **Replays:** recording a finished game, playing it back one event at a time, phase jumps, refusing actions, and rejecting files that are not replays.
+- **Web client:** the real UI in jsdom. One test watches a full game and opens an agent's mind panel. Another plays every decision through the buttons and the speech box. A third copies a replay at the end and plays it back from the start screen.
 
 ## Design notes
 
@@ -236,8 +239,8 @@ src/
   runner/      Match (drives a game), lineup (casting), GameSession (UI bridge)
   server/      HTTP + SSE game server
   sim/         simulation harness, report, transcripts, CLI
-  web/         index.html, style.css, UI, clients, claim extraction from typed speech
-test/          vitest suites (engine, agents, llm, session and server, web UI)
+  web/         index.html, style.css, UI, clients, replays, claim extraction from typed speech
+test/          vitest suites (engine, agents, llm, session and server, replays, web UI)
 scripts/       esbuild build
 ```
 
@@ -245,5 +248,4 @@ scripts/       esbuild build
 
 - Publish tournament results for real models (the `--crew` and `--undertow` flags are ready; this environment has no API key).
 - Add a learned or tuned policy: fit the belief likelihoods and policy dials to simulated play instead of setting them by hand.
-- Add replays: save serialized games and step through them in the spectator view.
 - Add sound and a little more motion in the UI, such as the hull creaking and the lights dimming at night.

@@ -36,6 +36,13 @@
       <label>Pace (ms per AI line) <input id="pace" type="range" min="0" max="3000" step="100" value="900" /></label>
       <button id="start" class="primary">Descend</button>
       <p id="server-note" class="hint"></p>
+      <details class="replay-load">
+        <summary>Watch a replay</summary>
+        <label>Replay file <input id="replay-file" type="file" accept=".json,application/json" /></label>
+        <label>or paste one <textarea id="replay-paste" rows="3" placeholder="Paste a copied replay here"></textarea></label>
+        <button id="replay-paste-go">Watch</button>
+        <p id="replay-error" class="err"></p>
+      </details>
     </section>
   </main>
 

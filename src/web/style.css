@@ -245,3 +245,13 @@ header {
   .side { border-left: 0; border-top: 1px solid var(--line); }
   .setup { grid-template-columns: 1fr; }
 }
+
+/* Replays */
+.replay { display: flex; flex-direction: column; gap: 8px; }
+.replay .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.replay .scrub { width: 100%; }
+.replay-load { margin-top: 12px; }
+.replay-load summary { cursor: pointer; color: var(--muted); }
+.replay-load label { display: block; margin-top: 8px; }
+.replay-load textarea, .replay-dump { width: 100%; font-family: ui-monospace, monospace; font-size: 11px; }
+.replay-dump { height: 80px; margin-top: 6px; }

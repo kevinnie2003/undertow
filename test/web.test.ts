@@ -68,4 +68,34 @@ describe('web client (in-browser, offline)', () => {
     expect(document.querySelector('.speech.mine')).not.toBeNull();
     expect(document.querySelector('#roster .badge.role')).not.toBeNull();
   }, 30000);
+
+  it('copies a replay at the end and plays it back from the start screen', async () => {
+    await boot();
+    let copied = '';
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t: string) => void (copied = t) }, configurable: true });
+    (document.querySelector('input[value=watch]') as HTMLInputElement).checked = true;
+    (document.getElementById('pace') as HTMLInputElement).value = '0';
+    (document.getElementById('players') as HTMLSelectElement).value = '5';
+    document.getElementById('start')!.click();
+    await until(() => !!document.querySelector('.log .end'));
+    const copy = [...document.querySelectorAll('#actions button')].find((b) => b.textContent === 'Copy replay') as HTMLButtonElement;
+    copy.click();
+    await until(() => copied.length > 0);
+    const totalLines = document.querySelectorAll('.log > *').length;
+
+    await boot();
+    (document.getElementById('replay-paste') as HTMLTextAreaElement).value = copied;
+    document.getElementById('replay-paste-go')!.click();
+    await until(() => !!document.querySelector('#actions .replay'));
+    expect(document.querySelector('.log .end')).toBeNull();
+    const button = (label: string) => document.querySelector(`#actions button[aria-label="${label}"]`) as HTMLButtonElement;
+    button('next phase').click();
+    button('step forward').click();
+    const scrub = document.querySelector('#actions .scrub') as HTMLInputElement;
+    scrub.value = scrub.max;
+    scrub.dispatchEvent(new Event('input'));
+    await until(() => !!document.querySelector('.log .end'));
+    expect(document.querySelectorAll('.log > *').length).toBe(totalLines);
+    expect(document.querySelector('#actions .pos')!.textContent).toMatch(/^(\d+) \/ \1$/);
+  }, 30000);
 });

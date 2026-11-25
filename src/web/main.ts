@@ -3,6 +3,7 @@ import type { Action, Claim, GameEvent, PlayerId, RoleId } from '../engine/types
 import type { AgentKind } from '../agents/factory.js';
 import { extractClaims } from './claimParser.js';
 import { LocalClient, RemoteClient, serverKinds, type GameClient, type NewGameOptions, type View } from './client.js';
+import { parseReplay, ReplayClient, ReplayRecorder } from './replay.js';
 
 // ---------------------------------------------------------------------------
 // Tiny DOM helper
@@ -35,6 +36,7 @@ let removedAuto = new Set<string>();
 let mind: PlayerId | null = null;
 let kinds: AgentKind[] | null = null;
 let sending = false;
+let recorder: ReplayRecorder | null = null;
 
 const KIND_LABEL: Record<AgentKind, string> = {
   heuristic: 'Heuristic agents (offline)',
@@ -57,6 +59,39 @@ async function initSetup() {
     : 'Running fully in your browser. Start the Node server for Claude or OpenAI-compatible agents.';
   ($('seed') as HTMLInputElement).value = String(Math.floor(Math.random() * 100000));
   $('start').addEventListener('click', () => void startGame());
+  const file = $('replay-file') as HTMLInputElement;
+  file.addEventListener('change', () => {
+    const f = file.files?.[0];
+    if (f) void f.text().then(openReplay);
+  });
+  $('replay-paste-go').addEventListener('click', () => openReplay(($('replay-paste') as HTMLTextAreaElement).value));
+}
+
+function openReplay(text: string) {
+  try {
+    const replay = parseReplay(text);
+    recorder = null;
+    showGame(new ReplayClient(replay), 700);
+  } catch (err) {
+    $('replay-error').textContent = (err as Error).message;
+  }
+}
+
+function showGame(c: GameClient, paceMs: number) {
+  client = c;
+  renderedEvents = 0;
+  draftClaims = [];
+  mind = null;
+  lastPendingKey = '';
+  $('log').replaceChildren();
+  $('setup').hidden = true;
+  $('game').hidden = false;
+  ($('pace-live') as HTMLInputElement).value = String(paceMs);
+  client.subscribe((v) => {
+    recorder?.push(v);
+    view = v;
+    render();
+  });
 }
 
 async function startGame() {
@@ -68,23 +103,15 @@ async function startGame() {
     agent: ($('agent') as HTMLSelectElement).value as AgentKind,
     paceMs: Number(($('pace') as HTMLInputElement).value),
   };
+  let c: GameClient;
   try {
-    client = kinds ? await RemoteClient.create(opts) : new LocalClient(opts);
+    c = kinds ? await RemoteClient.create(opts) : new LocalClient(opts);
   } catch (err) {
     $('server-note').textContent = `Could not start: ${(err as Error).message}`;
     return;
   }
-  renderedEvents = 0;
-  draftClaims = [];
-  mind = null;
-  $('log').replaceChildren();
-  $('setup').hidden = true;
-  $('game').hidden = false;
-  ($('pace-live') as HTMLInputElement).value = String(opts.paceMs);
-  client.subscribe((v) => {
-    view = v;
-    render();
-  });
+  recorder = new ReplayRecorder();
+  showGame(c, opts.paceMs);
 }
 
 // ---------------------------------------------------------------------------
@@ -407,11 +434,29 @@ function renderActions() {
   if (pending && (pending.kind === 'speak' || pending.kind === 'last_words') && lastPendingKey.startsWith(`${pending.kind}:${pending.round}`) && panel.querySelector('textarea')) {
     return;
   }
-  lastPendingKey = key;
-  if (v.phase === 'ended') {
-    panel.replaceChildren(h('div', { class: 'waiting' }, h('button', { class: 'primary', onclick: () => location.reload() }, 'New game')));
+  if (client instanceof ReplayClient) {
+    lastPendingKey = key;
+    if (!panel.querySelector('.replay')) panel.replaceChildren(replayControls(client));
+    updateReplayControls(client);
     return;
   }
+  if (v.phase === 'ended') {
+    if (lastPendingKey === key) return;
+    lastPendingKey = key;
+    const note = h('span', { class: 'hint' });
+    panel.replaceChildren(
+      h(
+        'div',
+        { class: 'waiting' },
+        h('button', { class: 'primary', onclick: () => location.reload() }, 'New game'),
+        recorder?.ready ? h('button', { onclick: () => saveReplay(note) }, 'Save replay') : null,
+        recorder?.ready ? h('button', { class: 'ghost', onclick: () => void copyReplay(note) }, 'Copy replay') : null,
+        note,
+      ),
+    );
+    return;
+  }
+  lastPendingKey = key;
   if (!pending) {
     const who = v.thinking.map(name);
     panel.replaceChildren(
@@ -529,6 +574,74 @@ function speechComposer(kind: 'speak' | 'last_words', targets: PlayerId[]): HTML
     h('div', { class: 'builder' }, h('span', { class: 'label' }, 'add claim'), type, target, target2, target3, extra, h('button', { class: 'ghost', onclick: add }, '+')),
     h('div', { class: 'row' }, h('button', { class: 'primary', onclick: submit }, kind === 'speak' ? 'Speak' : 'Say it')),
   );
+}
+
+function replayJson(): string {
+  return JSON.stringify(recorder!.build());
+}
+
+function saveReplay(note: HTMLElement) {
+  const blob = new Blob([replayJson()], { type: 'application/json' });
+  const a = h('a', { href: URL.createObjectURL(blob), download: `undertow-replay-${Date.now()}.json` }) as HTMLAnchorElement;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  note.textContent = 'Saved. Open it from the start screen to watch it again.';
+}
+
+async function copyReplay(note: HTMLElement) {
+  const text = replayJson();
+  try {
+    await navigator.clipboard.writeText(text);
+    note.textContent = 'Copied. Paste it on the start screen to watch it again.';
+  } catch {
+    const area = h('textarea', { class: 'replay-dump', readonly: true }) as HTMLTextAreaElement;
+    area.value = text;
+    note.replaceChildren('Copy this text:', area);
+    area.select();
+  }
+}
+
+function replayControls(rc: ReplayClient): HTMLElement {
+  const slider = h('input', { type: 'range', min: '0', max: String(rc.length - 1), value: String(rc.index), 'aria-label': 'replay position', class: 'scrub' }) as HTMLInputElement;
+  slider.addEventListener('input', () => rc.seek(Number(slider.value)));
+  const btn = (label: string, title: string, fn: () => void, cls = '') => h('button', { class: cls, title, 'aria-label': title, onclick: fn }, label);
+  const toggle = () => {
+    if (rc.playing) rc.pause();
+    else rc.play();
+    updateReplayControls(rc);
+  };
+  return h(
+    'div',
+    { class: 'replay' },
+    h(
+      'div',
+      { class: 'row' },
+      btn('⏮', 'previous phase', () => rc.seekPhase(-1)),
+      btn('◀', 'step back', () => rc.seek(rc.index - 1)),
+      h('button', { class: 'primary play', title: 'play', 'aria-label': 'play', onclick: toggle }, '▶'),
+      btn('▶|', 'step forward', () => rc.seek(rc.index + 1)),
+      btn('⏭', 'next phase', () => rc.seekPhase(1)),
+      h('span', { class: 'hint pos' }),
+      h('button', { class: 'ghost', onclick: () => location.reload() }, 'Leave replay'),
+    ),
+    slider,
+    paceControl(),
+  );
+}
+
+function updateReplayControls(rc: ReplayClient) {
+  const panel = $('actions');
+  const slider = panel.querySelector('.scrub') as HTMLInputElement | null;
+  if (slider && document.activeElement !== slider) slider.value = String(rc.index);
+  const pos = panel.querySelector('.pos');
+  if (pos) pos.textContent = `${rc.index + 1} / ${rc.length}`;
+  const play = panel.querySelector('.play') as HTMLButtonElement | null;
+  if (play) {
+    play.textContent = rc.playing ? '⏸' : '▶';
+    play.title = rc.playing ? 'pause' : 'play';
+    play.setAttribute('aria-label', play.title);
+  }
 }
 
 function paceControl(): HTMLElement {
