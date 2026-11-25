@@ -267,7 +267,7 @@ textarea {
 input[type='number'] {
   font-family: var(--mono);
 }
-.field input,
+.field input:not([type='radio']),
 .field select,
 .field textarea {
   width: 100%;
@@ -1103,6 +1103,9 @@ body[data-lang='zh'] .speech .text {
   .gauge {
     display: none;
   }
+  .intro h1 {
+    font-size: clamp(34px, 9vw, 56px);
+  }
   .form {
     margin-top: 32px;
   }
@@ -1119,9 +1122,12 @@ body[data-lang='zh'] .speech .text {
   }
   /* One page scroll on phones: no nested scrolling panes except the log. */
   .game {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     flex: none;
     height: auto;
+  }
+  .game > * {
+    min-width: 0;
   }
   .roster-col,
   .side {
